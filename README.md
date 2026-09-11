@@ -1,74 +1,21 @@
 # DevBoard
 
-A full-stack project and issue management platform for organizing projects, tasks, priorities, workflows, and personal assignments.
+A full-stack project and task management platform built to organize projects, manage tasks and track work through dashboards and Kanban workflows.
 
-DevBoard provides a responsive SaaS-style workspace with authentication, project management, Kanban boards, drag-and-drop task organization, dashboards, and persistent data stored in MongoDB.
+DevBoard was designed as a complete web application rather than a static demo, with persistent data, authentication, protected resources and a responsive interface.
 
-## Features
+## Overview
 
-### Authentication
+DevBoard provides a centralized workspace where users can:
 
-- User registration
-- User login
-- JWT authentication
-- Protected application routes
-- Automatic session expiration handling
-- Profile management
-- Logout
-
-### Projects
-
-- Create projects
-- Edit project information
-- Delete projects
-- Project status management
-- Search projects
-- Filter projects by status
-- Project members
-- Project overview and progress
-
-### Task Management
-
-- Create tasks
-- Edit tasks
-- Delete tasks
-- Assign tasks to project members
-- Task priorities
-- Due dates
-- Labels
-- Search tasks
-- Filter by priority and status
-
-### Kanban Board
-
-Tasks are organized into three workflow stages:
-
-- To do
-- In progress
-- Done
-
-The board supports drag-and-drop task movement and persistent ordering.
-
-### Dashboard
-
-The dashboard displays real workspace data including:
-
-- Total projects
-- Active projects
-- Open tasks
-- Completed tasks
-- Recent projects
-- Upcoming assigned tasks
-
-### My Tasks
-
-Users can view all tasks assigned to them across projects with:
-
-- Search
-- Status filters
-- Priority filters
-- Project references
-- Due dates
+- Create and manage projects
+- Organize tasks by project
+- Track work through Kanban boards
+- Assign task priorities and due dates
+- Filter and search projects and tasks
+- Review upcoming and completed work
+- Manage their account
+- Access only projects and data they are authorized to view
 
 ## Tech Stack
 
@@ -76,167 +23,224 @@ Users can view all tasks assigned to them across projects with:
 
 - React
 - TypeScript
-- Vite
 - Tailwind CSS
 - React Router
 - dnd-kit
+- Vite
 
 ### Backend
 
 - Node.js
 - Express
-- REST API
-- JWT
-- bcrypt
-
-### Database
-
-- MongoDB Atlas
+- MongoDB
 - Mongoose
 
-### Development Tools
+### Security
 
-- Git
-- GitHub
-- Postman
-- VS Code
-- Linux
+- JWT authentication
+- HttpOnly session cookies
+- bcrypt password hashing
+- Helmet security headers
+- Rate limiting
+- CORS origin restrictions
+- Protected API routes
+- Object-level project authorization
+- Server-side input validation
+
+## Features
+
+### Authentication
+
+- User registration
+- User login
+- Secure logout
+- Persistent authenticated sessions
+- Protected application routes
+- Account information management
+
+Authentication tokens are stored in **HttpOnly cookies**, preventing frontend JavaScript from directly accessing session tokens.
+
+### Dashboard
+
+The main dashboard provides an overview of:
+
+- Current projects
+- Active projects
+- Open tasks
+- Completed tasks
+- Upcoming deadlines
+- Recent project activity
+
+### Project Management
+
+Users can:
+
+- Create projects
+- Edit project information
+- Delete projects
+- Search projects
+- Filter projects by status
+- Sort projects
+- View project progress
+
+Supported project states include:
+
+- Planning
+- Active
+- Completed
+
+### Task Management
+
+Tasks can include:
+
+- Title
+- Description
+- Status
+- Priority
+- Assignee
+- Labels
+- Due date
+- Position within a workflow
+
+Supported task states:
+
+- Todo
+- In Progress
+- Done
+
+Supported priorities:
+
+- Low
+- Medium
+- High
+
+### Kanban Workflow
+
+Project tasks can be managed through an interactive Kanban board.
+
+Tasks can be moved between workflow stages using drag-and-drop interactions.
+
+### My Tasks
+
+The My Tasks section provides a centralized view of tasks assigned to the current user.
+
+Tasks can be:
+
+- Searched
+- Filtered by project
+- Filtered by priority
+- Filtered by status
+- Sorted by due date
+- Viewed as a list or board
+
+## Security
+
+DevBoard includes multiple layers of backend security.
+
+### Session Security
+
+Authentication uses signed JWT sessions stored in HttpOnly cookies.
+
+Cookies are configured with security settings appropriate for development and production environments.
+
+### Password Security
+
+Passwords are hashed using bcrypt before being stored in the database.
+
+Password validation is performed server-side before account creation.
+
+### Authorization
+
+Access to project resources is validated on the backend.
+
+Users cannot access projects belonging to another account simply by changing a project ID in the URL or API request.
+
+### API Protection
+
+The backend includes:
+
+- Helmet security headers
+- Request rate limiting
+- Login rate limiting
+- Registration rate limiting
+- Request body size limits
+- CORS restrictions
+- Origin validation
+- Protected API routes
 
 ## Project Structure
 
 ```text
 devboard/
 ├── client/
+│   ├── public/
 │   ├── src/
 │   │   ├── components/
-│   │   ├── features/
 │   │   ├── layouts/
 │   │   ├── pages/
 │   │   ├── services/
-│   │   ├── types/
-│   │   └── utils/
-│   └── package.json
+│   │   └── ...
+│   ├── package.json
+│   └── vite.config.*
 │
 ├── server/
 │   ├── src/
-│   │   ├── config/
 │   │   ├── controllers/
 │   │   ├── middleware/
 │   │   ├── models/
 │   │   ├── routes/
-│   │   ├── app.js
-│   │   └── server.js
+│   │   └── app.js
+│   ├── .env.example
 │   └── package.json
 │
-├── docs/
-├── .gitignore
 └── README.md
 ```
 
-## API Endpoints
+## Running Locally
 
-### Authentication
-
-```text
-POST   /api/auth/register
-POST   /api/auth/login
-GET    /api/auth/me
-PATCH  /api/auth/me
-```
-
-### Projects
-
-```text
-GET     /api/projects
-POST    /api/projects
-GET     /api/projects/:id
-PATCH   /api/projects/:id
-DELETE  /api/projects/:id
-```
-
-### Tasks
-
-```text
-GET     /api/projects/:projectId/tasks
-POST    /api/projects/:projectId/tasks
-GET     /api/tasks/mine
-PATCH   /api/tasks/:id
-DELETE  /api/tasks/:id
-```
-
-## Getting Started
-
-### Requirements
-
-Make sure you have installed:
-
-- Node.js
-- npm
-- Git
-- A MongoDB Atlas account
-
-### Clone the repository
+Clone the repository:
 
 ```bash
 git clone https://github.com/josueterrones2004/devboard.git
 cd devboard
 ```
 
-### Backend Setup
-
-Enter the server directory:
-
-```bash
-cd server
-```
+### Backend
 
 Install dependencies:
 
 ```bash
+cd server
 npm install
 ```
 
-Create a `.env` file:
+Create your local environment configuration using the included `.env.example` as reference.
 
-```env
-PORT=5000
-MONGODB_URI=your_mongodb_atlas_connection_string
-JWT_SECRET=your_secure_jwt_secret
-```
+The real `.env` file must remain private and should never be committed to Git.
 
-Start the development server:
+Start the backend:
 
 ```bash
 npm run dev
 ```
 
-The API will run at:
+The development API runs on:
 
 ```text
 http://localhost:5000
 ```
 
-### Frontend Setup
+### Frontend
 
-Open another terminal and enter the client directory:
+Open another terminal:
 
 ```bash
 cd client
-```
-
-Install dependencies:
-
-```bash
 npm install
-```
-
-Start the frontend:
-
-```bash
 npm run dev
 ```
 
-The application will run at:
+Vite will provide the local frontend URL, normally:
 
 ```text
 http://localhost:5173
@@ -244,49 +248,87 @@ http://localhost:5173
 
 ## Production Build
 
-From the client directory:
+Build the frontend with:
 
 ```bash
-npm run lint
+cd client
 npm run build
 ```
 
-## Security
+Run the frontend linter with:
 
-Sensitive values are stored using environment variables and are excluded from Git.
+```bash
+npm run lint
+```
 
-Never commit:
+## Environment Variables
 
-- MongoDB credentials
-- JWT secrets
-- `.env` files
-- Authentication tokens
+Sensitive values are stored using environment variables and are not committed to the repository.
 
-User passwords are hashed with bcrypt before being stored in MongoDB.
+Backend configuration includes values such as:
 
-## Current Status
+```text
+MONGO_URI
+JWT_SECRET
+CLIENT_URL
+```
 
-DevBoard v1 includes the complete core MVP:
+Use `server/.env.example` as the reference for the required configuration.
 
-- Authentication
-- Project CRUD
-- Task CRUD
-- Persistent Kanban board
-- Drag and drop
-- Dashboard
-- My Tasks
-- Profile settings
-- Responsive interface
+Never commit real credentials, database passwords or JWT secrets.
+
+## Database
+
+DevBoard uses MongoDB with Mongoose for persistent application data.
+
+The application stores information including:
+
+- Users
+- Projects
+- Tasks
+- Project membership
+- Task assignments
+- Workflow state
+
+## API
+
+The backend exposes REST endpoints for resources including:
+
+```text
+/api/auth
+/api/projects
+/api/tasks
+```
+
+Protected endpoints require an authenticated session.
+
+## Deployment
+
+DevBoard is designed so the frontend and backend can be deployed separately while using MongoDB Atlas as the production database.
+
+A public deployment will be added here after deployment configuration is complete.
+
+## Repository
+
+Source code:
+
+https://github.com/josueterrones2004/devboard
 
 ## Author
 
 **Josué Terrones**
 
-Full Stack Web Developer
+Full Stack Web Developer  
+Tonalá, Jalisco, México
 
-- GitHub: https://github.com/josueterrones2004
-- LinkedIn: https://www.linkedin.com/in/josueterrones2004/
+GitHub:  
+https://github.com/josueterrones2004
+
+LinkedIn:  
+https://www.linkedin.com/in/josueterrones2004/
 
 ## License
 
-This project is intended for portfolio and educational purposes.
+This project was created as a personal full-stack development project and portfolio piece.
+
+The source code is publicly available for reference and demonstration purposes.

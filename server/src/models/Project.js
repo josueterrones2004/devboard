@@ -1,61 +1,104 @@
 import mongoose from "mongoose";
 
-const projectSchema = new mongoose.Schema(
-  {
-    name: {
-      type: String,
-      required: [
-        true,
-        "Project name is required",
-      ],
-      trim: true,
-      maxlength: [
-        100,
-        "Project name cannot exceed 100 characters",
-      ],
-    },
+/*
+ * =========================================================
+ * PROJECT ICONS
+ * =========================================================
+ */
 
-    description: {
-      type: String,
-      trim: true,
-      maxlength: [
-        1000,
-        "Project description cannot exceed 1000 characters",
-      ],
-      default: "",
-    },
+export const PROJECT_ICONS = [
+  "folder",
+  "code",
+  "terminal",
+  "database",
+  "server",
+  "globe",
+  "layers",
+  "package",
+  "cpu",
+  "rocket",
+];
 
-    owner: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-    },
+/*
+ * =========================================================
+ * PROJECT SCHEMA
+ * =========================================================
+ */
 
-    members: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
+const projectSchema =
+  new mongoose.Schema(
+    {
+      name: {
+        type: String,
+        required: [
+          true,
+          "Project name is required",
+        ],
+        trim: true,
+        maxlength: [
+          100,
+          "Project name cannot exceed 100 characters",
+        ],
       },
-    ],
 
-    status: {
-      type: String,
-      enum: [
-        "planning",
-        "active",
-        "completed",
+      description: {
+        type: String,
+        trim: true,
+        maxlength: [
+          1000,
+          "Project description cannot exceed 1000 characters",
+        ],
+        default: "",
+      },
+
+      icon: {
+        type: String,
+        enum: PROJECT_ICONS,
+        default: "folder",
+      },
+
+      owner: {
+        type:
+          mongoose.Schema.Types
+            .ObjectId,
+        ref: "User",
+        required: true,
+      },
+
+      members: [
+        {
+          type:
+            mongoose.Schema.Types
+              .ObjectId,
+          ref: "User",
+        },
       ],
-      default: "active",
-    },
-  },
-  {
-    timestamps: true,
-  },
-);
 
-const Project = mongoose.model(
-  "Project",
-  projectSchema,
-);
+      status: {
+        type: String,
+        enum: [
+          "planning",
+          "active",
+          "completed",
+        ],
+        default: "planning",
+      },
+    },
+    {
+      timestamps: true,
+    },
+  );
+
+/*
+ * =========================================================
+ * PROJECT MODEL
+ * =========================================================
+ */
+
+const Project =
+  mongoose.model(
+    "Project",
+    projectSchema,
+  );
 
 export default Project;

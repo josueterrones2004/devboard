@@ -7,6 +7,51 @@ type ApiOptions =
     auth?: boolean;
   };
 
+type ApiErrorData = {
+  message?: string;
+  field?: string;
+  code?: string;
+};
+
+/*
+ * =========================================================
+ * API ERROR
+ * =========================================================
+ */
+
+class ApiError extends Error {
+  status: number;
+  field?: string;
+  code?: string;
+
+  constructor(
+    message: string,
+    status: number,
+    field?: string,
+    code?: string,
+  ) {
+    super(message);
+
+    this.name =
+      "ApiError";
+
+    this.status =
+      status;
+
+    this.field =
+      field;
+
+    this.code =
+      code;
+  }
+}
+
+/*
+ * =========================================================
+ * API REQUEST
+ * =========================================================
+ */
+
 async function apiRequest<T>(
   endpoint: string,
   options: ApiOptions = {},
@@ -17,40 +62,56 @@ async function apiRequest<T>(
     ...requestOptions
   } = options;
 
-  const token =
-    localStorage.getItem(
-      "devboard_token",
-    );
-
   const response =
     await fetch(
       `${API_URL}${endpoint}`,
       {
         ...requestOptions,
 
+        /*
+         * The browser sends the
+         * HttpOnly session cookie.
+         */
+
+        credentials:
+          "include",
+
         headers: {
           "Content-Type":
             "application/json",
-
-          ...(auth && token
-            ? {
-                Authorization:
-                  `Bearer ${token}`,
-              }
-            : {}),
 
           ...headers,
         },
       },
     );
 
-  const data =
-    await response.json();
+  /*
+   * =========================================================
+   * RESPONSE DATA
+   * =========================================================
+   */
+
+  const data: unknown =
+    await response
+      .json()
+      .catch(() => null);
+
+  /*
+   * =========================================================
+   * EXPIRED SESSION
+   * =========================================================
+   */
 
   if (
-    response.status === 401 &&
+    response.status ===
+      401 &&
     auth
   ) {
+    /*
+     * Remove any token left by
+     * the old Bearer implementation.
+     */
+
     localStorage.removeItem(
       "devboard_token",
     );
@@ -59,24 +120,56 @@ async function apiRequest<T>(
       "devboard_user",
     );
 
-    window.location.href =
-      "/login";
+    if (
+      window.location.pathname !==
+      "/login"
+    ) {
+      window.location.href =
+        "/login";
+    }
 
-    throw new Error(
+    throw new ApiError(
       "Session expired",
+      401,
     );
   }
+
+  /*
+   * =========================================================
+   * API ERROR
+   * =========================================================
+   */
 
   if (!response.ok) {
-    throw new Error(
-      data.message ??
+    const errorData =
+      (data ??
+        {}) as ApiErrorData;
+
+    throw new ApiError(
+      errorData.message ??
         "Something went wrong",
+      response.status,
+      errorData.field,
+      errorData.code,
     );
   }
+
+  /*
+   * =========================================================
+   * SUCCESS
+   * =========================================================
+   */
 
   return data as T;
 }
 
+/*
+ * =========================================================
+ * EXPORTS
+ * =========================================================
+ */
+
 export {
+  ApiError,
   apiRequest,
 };

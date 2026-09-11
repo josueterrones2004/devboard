@@ -12,6 +12,11 @@ type TaskPriority =
   | "medium"
   | "high";
 
+type ProjectStatus =
+  | "planning"
+  | "active"
+  | "completed";
+
 type TaskAssignee = {
   _id: string;
   name: string;
@@ -22,7 +27,7 @@ type TaskAssignee = {
 type TaskProject = {
   _id: string;
   name: string;
-  status: string;
+  status: ProjectStatus;
 };
 
 type Task = {
@@ -57,7 +62,13 @@ type MyTasksResponse = {
   tasks: MyTask[];
 };
 
-type TaskResponse = {
+type CreateTaskResponse = {
+  message: string;
+  task: Task;
+  projectStatus: ProjectStatus;
+};
+
+type UpdateTaskResponse = {
   message: string;
   task: Task;
 };
@@ -101,12 +112,14 @@ async function createTask(
   projectId: string,
   data: CreateTaskData,
 ) {
-  return apiRequest<TaskResponse>(
+  return apiRequest<CreateTaskResponse>(
     `/api/projects/${projectId}/tasks`,
     {
       method: "POST",
       auth: true,
-      body: JSON.stringify(data),
+      body: JSON.stringify(
+        data,
+      ),
     },
   );
 }
@@ -115,12 +128,14 @@ async function updateTask(
   taskId: string,
   data: UpdateTaskData,
 ) {
-  return apiRequest<TaskResponse>(
+  return apiRequest<UpdateTaskResponse>(
     `/api/tasks/${taskId}`,
     {
       method: "PATCH",
       auth: true,
-      body: JSON.stringify(data),
+      body: JSON.stringify(
+        data,
+      ),
     },
   );
 }

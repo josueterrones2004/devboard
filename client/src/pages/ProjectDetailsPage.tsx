@@ -1,6 +1,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
   type Dispatch,
   type FormEvent,
@@ -37,11 +38,18 @@ import {
   useParams,
 } from "react-router-dom";
 
+import ConfirmModal from "../components/ConfirmModal";
+import ErrorToast from "../components/ErrorToast";
 import ProjectActions from "../components/ProjectActions";
+
+import {
+  ApiError,
+} from "../services/api";
 
 import {
   getProject,
   type Project,
+  type ProjectIcon,
 } from "../services/projectService";
 
 import {
@@ -57,6 +65,19 @@ import {
 type PriorityFilter =
   | "all"
   | TaskPriority;
+
+/*
+ * =========================================================
+ * DROPDOWN TYPES
+ * =========================================================
+ */
+
+type DropdownOption<
+  T extends string,
+> = {
+  label: string;
+  value: T;
+};
 
 type TaskForm = {
   title: string;
@@ -365,6 +386,33 @@ function ProjectDetailsPage() {
       null,
     );
 
+  const [
+    toastMessage,
+    setToastMessage,
+  ] = useState("");
+
+  const [
+    errorField,
+    setErrorField,
+  ] = useState<string | null>(
+    null,
+  );
+
+  const [shaking, setShaking] =
+    useState(false);
+
+  const [
+    taskToDelete,
+    setTaskToDelete,
+  ] = useState<Task | null>(
+    null,
+  );
+
+  const [
+    deletingTask,
+    setDeletingTask,
+  ] = useState(false);
+
   const sensors =
     useSensors(
       useSensor(
@@ -474,6 +522,24 @@ function ProjectDetailsPage() {
         )
       : 0;
 
+  /*
+   * =========================================================
+   * DERIVED PROJECT STATUS
+   * =========================================================
+   */
+
+  const projectStatus:
+    Project["status"] =
+      tasks.length === 0
+        ? (project?.status ?? "planning")
+        : tasks.every(
+              (task) =>
+                task.status ===
+                "done",
+            )
+          ? "completed"
+          : "active";
+
   const activeTask =
     activeTaskId
       ? tasks.find(
@@ -483,15 +549,89 @@ function ProjectDetailsPage() {
         ) ?? null
       : null;
 
+  const triggerModalError = (
+    message: string,
+    field?: string,
+  ) => {
+    setToastMessage(
+      message,
+    );
+
+    setErrorField(
+      field ?? null,
+    );
+
+    setShaking(false);
+
+    window.requestAnimationFrame(
+      () => {
+        setShaking(true);
+      },
+    );
+
+    window.setTimeout(
+      () => {
+        setShaking(false);
+      },
+      380,
+    );
+  };
+
+
+  /*
+   * =========================================================
+   * LOADING STATE
+   * =========================================================
+   */
+
   if (loading) {
     return (
-      <div className="flex min-h-[500px] items-center justify-center">
-        <p className="text-sm font-bold text-white/30">
+      <div
+        className="flex min-h-[calc(100vh-86px)] items-center justify-center"
+        style={{
+          backgroundColor:
+            "#1b1b2b",
+
+          backgroundImage: `
+            linear-gradient(
+              rgba(201,224,235,.020) 1px,
+              transparent 1px
+            ),
+            linear-gradient(
+              90deg,
+              rgba(201,224,235,.020) 1px,
+              transparent 1px
+            ),
+            radial-gradient(
+              ellipse at 34% -8%,
+              rgba(115,146,181,.20),
+              transparent 35rem
+            ),
+            radial-gradient(
+              ellipse at 86% 0%,
+              rgba(131,80,196,.16),
+              transparent 31rem
+            )
+          `,
+
+          backgroundSize:
+            "56px 56px, 56px 56px, auto, auto",
+        }}
+      >
+        <div className="flex items-center gap-3 rounded-2xl border border-[rgb(96_105_144_/_0.30)] bg-[#202235]/80 px-5 py-4 text-xs font-bold text-[var(--text-muted)] backdrop-blur-xl">
+          <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-[var(--lilac-300)]" />
+
           Loading project...
-        </p>
+        </div>
       </div>
     );
   }
+
+  /*
+   * =========================================================
+   * ERROR STATE
+   * =========================================================
+   */
 
   if (
     error ||
@@ -499,8 +639,29 @@ function ProjectDetailsPage() {
     !projectId
   ) {
     return (
-      <div className="mx-auto max-w-3xl px-6 py-12">
-        <div className="rounded-2xl border border-[#ff6b7a]/20 bg-[#ff6b7a]/10 p-6 text-sm font-semibold text-[#ff8994]">
+      <div
+        className="min-h-[calc(100vh-86px)] px-6 py-12"
+        style={{
+          backgroundColor:
+            "#1b1b2b",
+
+          backgroundImage: `
+            linear-gradient(
+              rgba(201,224,235,.020) 1px,
+              transparent 1px
+            ),
+            linear-gradient(
+              90deg,
+              rgba(201,224,235,.020) 1px,
+              transparent 1px
+            )
+          `,
+
+          backgroundSize:
+            "56px 56px",
+        }}
+      >
+        <div className="mx-auto max-w-3xl rounded-[20px] border border-[rgb(212_77_92_/_0.28)] bg-[rgb(212_77_92_/_0.10)] p-6 text-sm font-semibold text-[var(--lilac-200)]">
           {error ||
             "Project not found"}
         </div>
@@ -512,6 +673,8 @@ function ProjectDetailsPage() {
     status: TaskStatus = "todo",
   ) => {
     setEditingTask(null);
+    setErrorField(null);
+    setToastMessage("");
 
     setTaskForm(
       createEmptyForm(
@@ -527,28 +690,24 @@ function ProjectDetailsPage() {
     task: Task,
   ) => {
     setEditingTask(task);
+    setErrorField(null);
+    setToastMessage("");
 
     setTaskForm({
       title: task.title,
-
       description:
         task.description,
-
       status: task.status,
-
       priority:
         task.priority,
-
       assignee:
         task.assignee?._id ??
         "",
-
       dueDate:
         task.dueDate?.slice(
           0,
           10,
         ) ?? "",
-
       labels:
         task.labels.join(
           ", ",
@@ -556,6 +715,15 @@ function ProjectDetailsPage() {
     });
 
     setModalOpen(true);
+  };
+
+  const closeTaskModal = () => {
+    setModalOpen(false);
+    setEditingTask(null);
+    setTaskForm(null);
+    setErrorField(null);
+    setToastMessage("");
+    setShaking(false);
   };
 
   const handleSaveTask =
@@ -568,8 +736,28 @@ function ProjectDetailsPage() {
         return;
       }
 
+      if (
+        !taskForm.title.trim()
+      ) {
+        triggerModalError(
+          "Task title is required",
+          "title",
+        );
+
+        return;
+      }
+
+      if (!taskForm.dueDate) {
+        triggerModalError(
+          "Due date is required",
+          "dueDate",
+        );
+
+        return;
+      }
+
       setSaving(true);
-      setError("");
+      setErrorField(null);
 
       const labels =
         taskForm.labels
@@ -602,8 +790,7 @@ function ProjectDetailsPage() {
                   null,
 
                 dueDate:
-                  taskForm.dueDate ||
-                  null,
+                  taskForm.dueDate,
 
                 labels,
               },
@@ -643,12 +830,22 @@ function ProjectDetailsPage() {
                   null,
 
                 dueDate:
-                  taskForm.dueDate ||
-                  null,
+                  taskForm.dueDate,
 
                 labels,
               },
             );
+
+          setProject(
+            (current) =>
+              current
+                ? {
+                    ...current,
+                    status:
+                      response.projectStatus,
+                  }
+                : current,
+          );
 
           setTasks(
             (current) =>
@@ -659,53 +856,79 @@ function ProjectDetailsPage() {
           );
         }
 
-        setModalOpen(false);
-        setEditingTask(null);
-        setTaskForm(null);
+        closeTaskModal();
       } catch (error) {
-        setError(
-          error instanceof Error
-            ? error.message
-            : "Failed to save task",
-        );
+        if (
+          error instanceof ApiError
+        ) {
+          triggerModalError(
+            error.message,
+            error.field,
+          );
+        } else {
+          triggerModalError(
+            error instanceof Error
+              ? error.message
+              : "Failed to save task",
+          );
+        }
       } finally {
         setSaving(false);
       }
     };
 
-  const handleDeleteTask =
-    async (
-      task: Task,
-    ) => {
-      if (
-        !window.confirm(
-          `Delete "${task.title}"?`,
-        )
-      ) {
+  const handleDeleteTask = (
+    task: Task,
+  ) => {
+    setTaskToDelete(task);
+  };
+
+  const confirmDeleteTask =
+    async () => {
+      if (!taskToDelete) {
         return;
       }
 
+      setDeletingTask(true);
+
       try {
         await deleteTask(
-          task._id,
+          taskToDelete._id,
         );
 
         setTasks(
           (current) =>
             normalizePositions(
               current.filter(
-                (item) =>
-                  item._id !==
-                  task._id,
+                (task) =>
+                  task._id !==
+                  taskToDelete._id,
               ),
             ),
         );
+
+        if (tasks.length === 1) {
+          setProject(
+            (current) =>
+              current
+                ? {
+                    ...current,
+                    status:
+                      "planning",
+                  }
+                : current,
+          );
+        }
+
+        setTaskToDelete(null);
       } catch (error) {
-        setError(
+        setToastMessage(
           error instanceof Error
             ? error.message
             : "Failed to delete task",
         );
+      } finally {
+        setDeletingTask(false);
       }
     };
 
@@ -781,7 +1004,6 @@ function ProjectDetailsPage() {
           tasks,
           activeData.taskId,
           overData.status,
-
           overData.type ===
             "task"
             ? overData.taskId
@@ -791,305 +1013,1026 @@ function ProjectDetailsPage() {
       setTasks(nextTasks);
 
       try {
-        await Promise.all(
-          nextTasks.map(
-            (task) =>
-              updateTask(
-                task._id,
-                {
-                  status:
-                    task.status,
+        for (
+          const task of nextTasks
+        ) {
+          await updateTask(
+            task._id,
+            {
+              status:
+                task.status,
 
-                  position:
-                    task.position,
-                },
-              ),
-          ),
-        );
+              position:
+                task.position,
+            },
+          );
+        }
       } catch {
         setTasks(
           previousTasks,
         );
 
-        setError(
+        setToastMessage(
           "Failed to save task order",
         );
       }
     };
 
+  /*
+   * =========================================================
+   * PROJECT COUNTS
+   * =========================================================
+   */
+
+  const todoCount =
+    tasks.filter(
+      (task) =>
+        task.status ===
+        "todo",
+    ).length;
+
+  const inProgressCount =
+    tasks.filter(
+      (task) =>
+        task.status ===
+        "in-progress",
+    ).length;
+
+  /*
+   * =========================================================
+   * RENDER
+   * =========================================================
+   */
+
   return (
     <>
-      <div className="mx-auto w-full max-w-[1800px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-        <section className="border-b border-white/[0.07] pb-8">
+      {toastMessage && (
+        <ErrorToast
+          message={
+            toastMessage
+          }
+          onClose={() =>
+            setToastMessage(
+              "",
+            )
+          }
+        />
+      )}
+
+      <div
+        className="relative isolate z-0 min-h-[calc(100vh-86px)]"
+        style={{
+          backgroundColor:
+            "#1b1b2b",
+
+          backgroundImage: `
+            linear-gradient(
+              rgba(201,224,235,.020) 1px,
+              transparent 1px
+            ),
+            linear-gradient(
+              90deg,
+              rgba(201,224,235,.020) 1px,
+              transparent 1px
+            ),
+            radial-gradient(
+              ellipse at 34% -8%,
+              rgba(115,146,181,.20),
+              transparent 35rem
+            ),
+            radial-gradient(
+              ellipse at 86% 0%,
+              rgba(131,80,196,.16),
+              transparent 31rem
+            ),
+            linear-gradient(
+              135deg,
+              #1b1b2b 0%,
+              #1f1e32 48%,
+              #1b1b2b 100%
+            )
+          `,
+
+          backgroundSize:
+            "56px 56px, 56px 56px, auto, auto, auto",
+        }}
+      >
+        <div className="mx-auto w-full max-w-[1680px] px-4 py-6 sm:px-6 lg:px-8 lg:py-7">
+          {/*
+           * =========================================================
+           * BACK TO PROJECTS
+           * =========================================================
+           */}
+
           <Link
             to="/projects"
-            className="text-xs font-black text-white/30 transition-colors hover:text-white"
+            className="group inline-flex items-center gap-2 rounded-xl px-1 py-1 text-[10px] font-black text-[var(--denim-300)] transition-colors hover:text-[var(--pale-sky)]"
           >
-            ← Back to projects
+            <ChevronLeftIcon />
+
+            Back to projects
           </Link>
 
-          <div className="mt-6 flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
-            <div className="max-w-3xl">
-              <div className="flex items-center gap-3">
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#8f7bff]">
-                  {project.status}
-                </p>
+          {/*
+           * =========================================================
+           * PROJECT HERO
+           * =========================================================
+           */}
 
-                <span className="h-1 w-1 rounded-full bg-white/20" />
+          <section
+            className="relative mt-4 overflow-hidden rounded-[24px] border border-[rgb(131_80_196_/_0.40)] shadow-[0_28px_75px_-52px_rgba(109,54,222,.65)]"
+            style={{
+              backgroundImage: `
+                radial-gradient(
+                  circle at 86% 12%,
+                  rgba(131,80,196,.24),
+                  transparent 22rem
+                ),
+                radial-gradient(
+                  circle at 58% 110%,
+                  rgba(115,146,181,.17),
+                  transparent 22rem
+                ),
+                linear-gradient(
+                  120deg,
+                  #242138 0%,
+                  #29233f 48%,
+                  #30264c 100%
+                )
+              `,
+            }}
+          >
+            {/*
+             * =========================================================
+             * HERO GRID BACKGROUND
+             * =========================================================
+             */}
 
-                <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-white/25">
-                  MongoDB
-                </p>
-              </div>
-
-              <h2 className="mt-3 text-3xl font-black tracking-[-0.05em] text-white sm:text-4xl lg:text-5xl">
-                {project.name}
-              </h2>
-
-              <p className="mt-4 max-w-2xl text-sm leading-6 text-white/40 sm:text-base">
-                {project.description ||
-                  "No description provided."}
-              </p>
-            </div>
-
-            <div className="flex flex-wrap gap-3 self-start xl:self-auto">
-              <ProjectActions
-                project={project}
-                onUpdated={
-                  setProject
-                }
-              />
-
-              <button
-                type="button"
-                onClick={() =>
-                  openCreateModal()
-                }
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#7657ff] px-5 py-3 text-xs font-black text-white transition-all hover:-translate-y-0.5 hover:bg-[#846cff]"
-              >
-                <span className="text-lg">
-                  +
-                </span>
-
-                New task
-              </button>
-            </div>
-          </div>
-
-          <div className="mt-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <Metric
-              label="Progress"
-              value={`${progress}%`}
-            />
-
-            <Metric
-              label="Completed"
-              value={`${completedTasks}/${tasks.length}`}
-            />
-
-            <Metric
-              label="Total tasks"
-              value={String(
-                tasks.length,
-              )}
-            />
-
-            <div className="rounded-xl border border-white/[0.07] bg-[#111218] px-4 py-4">
-              <p className="text-[9px] font-black uppercase tracking-[0.14em] text-white/20">
-                Members
-              </p>
-
-              <div className="mt-3 flex">
-                {project.members.map(
-                  (member) => (
-                    <div
-                      key={
-                        member._id
-                      }
-                      title={
-                        member.name
-                      }
-                      className="-ml-1.5 flex h-8 w-8 first:ml-0 items-center justify-center rounded-full border-2 border-[#111218] bg-[#1d1e27] text-[8px] font-black text-[#a897ff]"
-                    >
-                      {getInitials(
-                        member.name,
-                      )}
-                    </div>
-                  ),
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-[#7657ff] to-[#4c7dff] transition-[width]"
+              className="pointer-events-none absolute inset-0 opacity-40"
               style={{
-                width: `${progress}%`,
+                backgroundImage: `
+                  linear-gradient(
+                    rgba(201,224,235,.035) 1px,
+                    transparent 1px
+                  ),
+                  linear-gradient(
+                    90deg,
+                    rgba(201,224,235,.035) 1px,
+                    transparent 1px
+                  )
+                `,
+
+                backgroundSize:
+                  "36px 36px",
+
+                maskImage:
+                  "linear-gradient(90deg, transparent 15%, black 100%)",
               }}
             />
-          </div>
-        </section>
 
-        {error && (
-          <div className="mt-6 rounded-xl border border-[#ff6b7a]/20 bg-[#ff6b7a]/10 px-4 py-3 text-xs font-semibold text-[#ff8994]">
-            {error}
-          </div>
-        )}
+            <div className="relative z-[1] grid gap-6 p-5 sm:p-6 xl:grid-cols-[minmax(0,1.18fr)_minmax(430px,.82fr)] xl:items-stretch">
+              {/*
+               * =========================================================
+               * PROJECT IDENTITY
+               * =========================================================
+               */}
 
-        <section className="mt-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <input
-            type="search"
-            value={search}
-            onChange={(event) =>
-              setSearch(
-                event.target.value,
-              )
+              <div className="flex min-w-0 flex-col justify-between">
+                <div>
+                  <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
+                    <ProjectGlyph
+                      name={
+                        project.name
+                      }
+                      icon={
+                        project.icon
+                      }
+                    />
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2.5">
+                        <ProjectStatusBadge
+                          status={
+                            projectStatus
+                          }
+                        />
+
+                        <span className="h-1 w-1 rounded-full bg-[var(--denim-300)]/50" />
+
+                        <span className="text-[8px] font-black uppercase tracking-[0.14em] text-[var(--text-faint)]">
+                          Project workspace
+                        </span>
+                      </div>
+
+                      <h1 className="db-display-title mt-3 break-words text-[2.45rem] leading-[0.98] sm:text-[3rem]">
+                        {project.name}
+                      </h1>
+
+                      <p className="mt-4 max-w-3xl text-xs leading-6 text-[var(--text-secondary)] sm:text-sm">
+                        {project.description ||
+                          "No description provided."}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-6 flex flex-wrap items-center gap-3">
+            <ProjectActions
+            project={{
+             ...project,
+             status:
+              projectStatus,
+            }}
+            onUpdated={
+              setProject
             }
-            placeholder="Search tasks..."
-            className="h-12 w-full rounded-xl border border-white/[0.08] bg-[#111218] px-4 text-sm font-semibold text-white outline-none placeholder:text-white/20 focus:border-[#7657ff]/60 focus:ring-4 focus:ring-[#7657ff]/10 lg:max-w-md"
           />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      openCreateModal()
+                    }
+                    className="inline-flex h-11 items-center justify-center gap-2.5 rounded-xl border border-[rgb(177_138_235_/_0.52)] bg-[linear-gradient(135deg,#8350c4,#6d36de)] px-5 text-[10px] font-black text-[var(--sky-50)] shadow-[0_16px_32px_-18px_rgba(109,54,222,.78)] transition-all hover:-translate-y-0.5 hover:brightness-110"
+                  >
+                    <PlusIcon />
 
-          <div className="flex flex-wrap gap-2">
-            {priorityFilters.map(
-              (filter) => (
-                <button
-                  key={
-                    filter.value
-                  }
-                  type="button"
-                  onClick={() =>
-                    setPriorityFilter(
-                      filter.value,
-                    )
-                  }
-                  className={`rounded-xl border px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.12em] ${
-                    priorityFilter ===
-                    filter.value
-                      ? "border-[#7657ff]/50 bg-[#7657ff]/15 text-[#a897ff]"
-                      : "border-white/[0.07] bg-[#111218] text-white/30"
-                  }`}
-                >
-                  {filter.label}
-                </button>
-              ),
-            )}
-          </div>
-        </section>
+                    New task
+                  </button>
+                </div>
+              </div>
 
-        <DndContext
-          sensors={sensors}
-          collisionDetection={
-            closestCorners
-          }
-          onDragStart={
-            handleDragStart
-          }
-          onDragOver={
-            handleDragOver
-          }
-          onDragEnd={
-            handleDragEnd
-          }
-        >
-          <section className="mt-6 grid items-start gap-4 xl:grid-cols-3">
-            {columns.map(
-              (column) => (
-                <KanbanColumn
-                  key={column.id}
-                  column={column}
-                  tasks={filteredTasks.filter(
-                    (task) =>
-                      task.status ===
-                      column.id,
-                  )}
-                  highlighted={
-                    dragOverStatus ===
-                    column.id
-                  }
-                  onAdd={() =>
-                    openCreateModal(
-                      column.id,
-                    )
-                  }
-                  onEdit={
-                    openEditModal
-                  }
-                  onDelete={
-                    handleDeleteTask
-                  }
-                />
-              ),
-            )}
+              {/*
+               * =========================================================
+               * PROJECT PROGRESS
+               * =========================================================
+               */}
+
+              <div className="rounded-[20px] border border-[rgb(201_224_235_/_0.10)] bg-[#202235]/65 p-5 backdrop-blur-sm">
+                <div className="flex items-end justify-between gap-4">
+                  <div>
+                    <p className="text-[8px] font-black uppercase tracking-[0.15em] text-[var(--text-faint)]">
+                      Project progress
+                    </p>
+
+                    <p className="db-display-title mt-1 text-[2.25rem] leading-none">
+                      {progress}%
+                    </p>
+                  </div>
+
+                  <p className="text-right text-[9px] font-semibold leading-4 text-[var(--text-muted)]">
+                    {completedTasks} of{" "}
+                    {tasks.length} tasks
+                    completed
+                  </p>
+                </div>
+
+                <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-[#171827]/80">
+                  <div
+                    className="h-full rounded-full bg-[linear-gradient(90deg,#7392b5,#8350c4,#6d36de)] transition-[width]"
+                    style={{
+                      width: `${progress}%`,
+                    }}
+                  />
+                </div>
+
+                <div className="mt-5 grid grid-cols-3 divide-x divide-[rgb(201_224_235_/_0.10)]">
+                  <HeroStat
+                    label="To do"
+                    value={
+                      todoCount
+                    }
+                  />
+
+                  <HeroStat
+                    label="In progress"
+                    value={
+                      inProgressCount
+                    }
+                  />
+
+                  <HeroStat
+                    label="Done"
+                    value={
+                      completedTasks
+                    }
+                  />
+                </div>
+
+                <div className="mt-5 border-t border-[rgb(201_224_235_/_0.10)] pt-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-[8px] font-black uppercase tracking-[0.14em] text-[var(--text-faint)]">
+                        Members
+                      </p>
+
+                      <p className="mt-1 text-[9px] font-semibold text-[var(--text-muted)]">
+                        {project.members.length}{" "}
+                        {project.members.length ===
+                        1
+                          ? "member"
+                          : "members"}
+                      </p>
+                    </div>
+
+                    <MemberStack
+                      members={
+                        project.members
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
           </section>
 
-          <DragOverlay>
-            {activeTask ? (
-              <TaskPreview
-                task={activeTask}
+          {/*
+           * =========================================================
+           * BOARD TOOLBAR
+           * =========================================================
+           */}
+
+          <section className="mt-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="relative w-full lg:max-w-[430px]">
+              <SearchIcon />
+
+              <input
+                type="search"
+                value={
+                  search
+                }
+                onChange={(
+                  event,
+                ) =>
+                  setSearch(
+                    event.target
+                      .value,
+                  )
+                }
+                placeholder="Search tasks, labels or descriptions..."
+                className="h-12 w-full rounded-xl border border-[rgb(96_105_144_/_0.30)] bg-[#202235]/90 pl-11 pr-4 text-xs font-semibold text-[var(--pale-sky)] outline-none transition-all placeholder:text-[var(--text-faint)] hover:border-[rgb(115_146_181_/_0.44)] focus:border-[rgb(177_138_235_/_0.50)] focus:ring-4 focus:ring-[rgb(131_80_196_/_0.10)]"
               />
-            ) : null}
-          </DragOverlay>
-        </DndContext>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {priorityFilters.map(
+                (filter) => {
+                  const active =
+                    priorityFilter ===
+                    filter.value;
+
+                  return (
+                    <button
+                      key={
+                        filter.value
+                      }
+                      type="button"
+                      onClick={() =>
+                        setPriorityFilter(
+                          filter.value,
+                        )
+                      }
+                      className={`h-11 rounded-xl border px-4 text-[8px] font-black uppercase tracking-[0.12em] transition-all ${
+                        active
+                          ? "border-[rgb(177_138_235_/_0.48)] bg-[linear-gradient(135deg,#4d2d74,#6d36de)] text-[var(--sky-50)] shadow-[0_14px_30px_-20px_rgba(109,54,222,.78)]"
+                          : "border-[rgb(96_105_144_/_0.28)] bg-[#202235]/85 text-[var(--text-muted)] hover:border-[rgb(115_146_181_/_0.42)] hover:bg-[#292b40] hover:text-[var(--pale-sky)]"
+                      }`}
+                    >
+                      {filter.value ===
+                      "all"
+                        ? "All priorities"
+                        : filter.label}
+                    </button>
+                  );
+                },
+              )}
+            </div>
+          </section>
+
+          {/*
+           * =========================================================
+           * KANBAN BOARD
+           * =========================================================
+           */}
+
+          <DndContext
+            sensors={
+              sensors
+            }
+            collisionDetection={
+              closestCorners
+            }
+            onDragStart={
+              handleDragStart
+            }
+            onDragOver={
+              handleDragOver
+            }
+            onDragEnd={
+              handleDragEnd
+            }
+          >
+            <section className="mt-5 grid items-start gap-4 xl:grid-cols-3">
+              {columns.map(
+                (column) => (
+                  <KanbanColumn
+                    key={
+                      column.id
+                    }
+                    column={
+                      column
+                    }
+                    tasks={filteredTasks.filter(
+                      (task) =>
+                        task.status ===
+                        column.id,
+                    )}
+                    highlighted={
+                      dragOverStatus ===
+                      column.id
+                    }
+                    onAdd={() =>
+                      openCreateModal(
+                        column.id,
+                      )
+                    }
+                    onEdit={
+                      openEditModal
+                    }
+                    onDelete={
+                      handleDeleteTask
+                    }
+                  />
+                ),
+              )}
+            </section>
+
+            <DragOverlay>
+              {activeTask ? (
+                <TaskPreview
+                  task={
+                    activeTask
+                  }
+                />
+              ) : null}
+            </DragOverlay>
+          </DndContext>
+        </div>
       </div>
+
+      {/*
+       * =========================================================
+       * TASK MODAL
+       * =========================================================
+       */}
 
       {modalOpen &&
         taskForm && (
           <TaskModal
-            project={project}
-            form={taskForm}
+            project={
+              project
+            }
+            form={
+              taskForm
+            }
             setForm={
               setTaskForm
             }
-            saving={saving}
-            editing={
-              Boolean(
-                editingTask,
-              )
+            saving={
+              saving
+            }
+            editing={Boolean(
+              editingTask,
+            )}
+            errorField={
+              errorField
+            }
+            setErrorField={
+              setErrorField
+            }
+            shaking={
+              shaking
             }
             onSubmit={
               handleSaveTask
             }
-            onClose={() => {
-              setModalOpen(
-                false,
-              );
-
-              setEditingTask(
-                null,
-              );
-
-              setTaskForm(
-                null,
-              );
-            }}
+            onClose={
+              closeTaskModal
+            }
           />
         )}
+
+      {/*
+       * =========================================================
+       * DELETE TASK MODAL
+       * =========================================================
+       */}
+
+      <div className="relative z-[800]">
+        <ConfirmModal
+          open={Boolean(
+            taskToDelete,
+          )}
+          title="Delete task?"
+          description={
+            taskToDelete
+              ? `You are about to permanently delete "${taskToDelete.title}". This action cannot be undone.`
+              : ""
+          }
+          confirmText="Delete task"
+          danger
+          loading={
+            deletingTask
+          }
+          onClose={() => {
+            if (
+              !deletingTask
+            ) {
+              setTaskToDelete(
+                null,
+              );
+            }
+          }}
+          onConfirm={
+            confirmDeleteTask
+          }
+        />
+      </div>
     </>
   );
 }
 
-type MetricProps = {
-  label: string;
-  value: string;
-};
+/*
+ * =========================================================
+ * HERO STAT
+ * =========================================================
+ */
 
-function Metric({
+function HeroStat({
   label,
   value,
-}: MetricProps) {
+}: {
+  label: string;
+  value: number;
+}) {
   return (
-    <div className="rounded-xl border border-white/[0.07] bg-[#111218] px-4 py-4">
-      <p className="text-[9px] font-black uppercase tracking-[0.14em] text-white/20">
-        {label}
+    <div className="px-4 first:pl-0 last:pr-0">
+      <p className="text-lg font-black text-[var(--pale-sky)]">
+        {value}
       </p>
 
-      <p className="mt-2 text-xl font-black text-white">
-        {value}
+      <p className="mt-1 text-[7px] font-black uppercase tracking-[0.10em] text-[var(--text-faint)]">
+        {label}
       </p>
     </div>
   );
 }
+
+/*
+ * =========================================================
+ * PROJECT STATUS BADGE
+ * =========================================================
+ */
+
+function ProjectStatusBadge({
+  status,
+}: {
+  status: Project["status"];
+}) {
+  const styles: Record<
+    Project["status"],
+    string
+  > = {
+    active:
+      "border-[rgb(131_80_196_/_0.38)] bg-[rgb(131_80_196_/_0.18)] text-[var(--lilac-200)]",
+
+    planning:
+      "border-[rgb(115_146_181_/_0.32)] bg-[rgb(115_146_181_/_0.14)] text-[var(--denim-300)]",
+
+    completed:
+      "border-[rgb(185_228_248_/_0.24)] bg-[rgb(185_228_248_/_0.10)] text-[#b9e4f8]",
+  };
+
+  return (
+    <span
+      className={`rounded-full border px-2.5 py-1 text-[7px] font-black uppercase tracking-[0.12em] ${styles[status]}`}
+    >
+      {status}
+    </span>
+  );
+}
+
+/*
+ * =========================================================
+ * PROJECT GLYPH
+ * =========================================================
+ */
+
+function ProjectGlyph({
+  name,
+  icon,
+}: {
+  name: string;
+  icon:
+    | ProjectIcon
+    | undefined;
+}) {
+  const variant =
+    getVisualVariant(
+      name,
+    );
+
+  const gradients = [
+    "linear-gradient(135deg,#8350c4,#6d36de,#402b47)",
+    "linear-gradient(135deg,#7392b5,#506e91,#402b47)",
+    "linear-gradient(135deg,#8350c4,#7392b5,#402b47)",
+    "linear-gradient(135deg,#c9e0eb,#7392b5,#402b47)",
+    "linear-gradient(135deg,#765d7e,#8350c4,#6d36de)",
+  ];
+
+  return (
+    <div
+      className="relative flex h-[104px] w-[104px] shrink-0 items-center justify-center overflow-hidden rounded-[22px] text-[var(--sky-50)]"
+      style={{
+        background:
+          gradients[
+            variant
+          ],
+
+        boxShadow: `
+          inset 0 0 0 1px rgba(201,224,235,.12),
+          0 20px 48px -28px rgba(109,54,222,.68)
+        `,
+      }}
+    >
+      <div className="pointer-events-none absolute -right-5 -top-5 h-20 w-20 rounded-full bg-white/15 blur-2xl" />
+
+      <div className="relative h-11 w-11">
+        <ProjectGlyphIcon
+          icon={
+            icon ??
+            "folder"
+          }
+        />
+      </div>
+    </div>
+  );
+}
+
+/*
+ * =========================================================
+ * PROJECT GLYPH ICON
+ * =========================================================
+ */
+
+function ProjectGlyphIcon({
+  icon,
+}: {
+  icon: ProjectIcon;
+}) {
+  if (
+    icon ===
+    "code"
+  ) {
+    return (
+      <ProjectSvgIcon>
+        <path
+          d="m8 7-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </ProjectSvgIcon>
+    );
+  }
+
+  if (
+    icon ===
+    "terminal"
+  ) {
+    return (
+      <ProjectSvgIcon>
+        <rect
+          x="3"
+          y="4"
+          width="18"
+          height="16"
+          rx="2.5"
+          stroke="currentColor"
+          strokeWidth="1.7"
+        />
+
+        <path
+          d="m7 9 3 3-3 3M12.5 15H17"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </ProjectSvgIcon>
+    );
+  }
+
+  if (
+    icon ===
+    "database"
+  ) {
+    return (
+      <ProjectSvgIcon>
+        <ellipse
+          cx="12"
+          cy="6"
+          rx="7"
+          ry="3"
+          stroke="currentColor"
+          strokeWidth="1.7"
+        />
+
+        <path
+          d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"
+          stroke="currentColor"
+          strokeWidth="1.7"
+        />
+      </ProjectSvgIcon>
+    );
+  }
+
+  if (
+    icon ===
+    "server"
+  ) {
+    return (
+      <ProjectSvgIcon>
+        <rect
+          x="4"
+          y="4"
+          width="16"
+          height="6"
+          rx="2"
+          stroke="currentColor"
+          strokeWidth="1.7"
+        />
+
+        <rect
+          x="4"
+          y="14"
+          width="16"
+          height="6"
+          rx="2"
+          stroke="currentColor"
+          strokeWidth="1.7"
+        />
+
+        <path
+          d="M8 7h.01M8 17h.01M12 7h5M12 17h5"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinecap="round"
+        />
+      </ProjectSvgIcon>
+    );
+  }
+
+  if (
+    icon ===
+    "globe"
+  ) {
+    return (
+      <ProjectSvgIcon>
+        <circle
+          cx="12"
+          cy="12"
+          r="9"
+          stroke="currentColor"
+          strokeWidth="1.7"
+        />
+
+        <path
+          d="M3.5 12h17M12 3c2.4 2.5 3.6 5.5 3.6 9S14.4 18.5 12 21M12 3C9.6 5.5 8.4 8.5 8.4 12s1.2 6.5 3.6 9"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+        />
+      </ProjectSvgIcon>
+    );
+  }
+
+  if (
+    icon ===
+    "layers"
+  ) {
+    return (
+      <ProjectSvgIcon>
+        <path
+          d="m12 4 8 4-8 4-8-4 8-4Z"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinejoin="round"
+        />
+
+        <path
+          d="m4 12 8 4 8-4M4 16l8 4 8-4"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </ProjectSvgIcon>
+    );
+  }
+
+  if (
+    icon ===
+    "package"
+  ) {
+    return (
+      <ProjectSvgIcon>
+        <path
+          d="m4 8 8-4 8 4-8 4-8-4Z"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinejoin="round"
+        />
+
+        <path
+          d="M4 8v8l8 4 8-4V8M12 12v8"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinejoin="round"
+        />
+      </ProjectSvgIcon>
+    );
+  }
+
+  if (
+    icon ===
+    "cpu"
+  ) {
+    return (
+      <ProjectSvgIcon>
+        <rect
+          x="7"
+          y="7"
+          width="10"
+          height="10"
+          rx="2"
+          stroke="currentColor"
+          strokeWidth="1.7"
+        />
+
+        <path
+          d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinecap="round"
+        />
+
+        <rect
+          x="10"
+          y="10"
+          width="4"
+          height="4"
+          rx=".7"
+          stroke="currentColor"
+          strokeWidth="1.5"
+        />
+      </ProjectSvgIcon>
+    );
+  }
+
+  if (
+    icon ===
+    "rocket"
+  ) {
+    return (
+      <ProjectSvgIcon>
+        <path
+          d="M14.5 4.5c2.2-1.4 4.6-1.5 5-1.1.4.4.3 2.8-1.1 5L13 13.8 8.2 9l6.3-4.5Z"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinejoin="round"
+        />
+
+        <path
+          d="M8.5 9H5l-2 4 5 1M13 13.5V17l-4 2-1-5M15.5 7.5h.01"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </ProjectSvgIcon>
+    );
+  }
+
+  return (
+    <ProjectSvgIcon>
+      <path
+        d="M4 7.5h6l2-2h8v13H4v-11Z"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </ProjectSvgIcon>
+  );
+}
+
+/*
+ * =========================================================
+ * PROJECT SVG ICON
+ * =========================================================
+ */
+
+function ProjectSvgIcon({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      className="h-full w-full"
+      aria-hidden="true"
+    >
+      {children}
+    </svg>
+  );
+}
+
+/*
+ * =========================================================
+ * MEMBER STACK
+ * =========================================================
+ */
+
+function MemberStack({
+  members,
+}: {
+  members:
+    Project["members"];
+}) {
+  const visible =
+    members.slice(
+      0,
+      4,
+    );
+
+  const remaining =
+    Math.max(
+      members.length -
+        visible.length,
+      0,
+    );
+
+  return (
+    <div className="flex">
+      {visible.map(
+        (
+          member,
+          index,
+        ) => (
+          <div
+            key={
+              member._id
+            }
+            title={
+              member.name
+            }
+            className={`flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#202235] text-[7px] font-black text-[var(--sky-50)] ${
+              index === 0
+                ? ""
+                : "-ml-1.5"
+            }`}
+            style={{
+              background:
+                getMemberGradient(
+                  member.name,
+                ),
+            }}
+          >
+            {getInitials(
+              member.name,
+            )}
+          </div>
+        ),
+      )}
+
+      {remaining > 0 && (
+        <div className="-ml-1.5 flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#202235] bg-[#313449] text-[7px] font-black text-[var(--denim-300)]">
+          +{remaining}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/*
+ * =========================================================
+ * KANBAN COLUMN
+ * =========================================================
+ */
 
 type KanbanColumnProps = {
   column:
@@ -1124,48 +2067,141 @@ function KanbanColumn({
 
       data: {
         type: "column",
-        status: column.id,
+        status:
+          column.id,
       } satisfies DragData,
     });
 
+  const styles: Record<
+    TaskStatus,
+    {
+      border: string;
+      background: string;
+      title: string;
+      dot: string;
+      count: string;
+    }
+  > = {
+    todo: {
+      border:
+        "border-[rgb(131_80_196_/_0.30)]",
+
+      background:
+        "bg-[linear-gradient(145deg,#242138,#211f32)]",
+
+      title:
+        "text-[var(--pale-sky)]",
+
+      dot:
+        "border-[var(--lilac-300)]",
+
+      count:
+        "bg-[rgb(131_80_196_/_0.14)] text-[var(--lilac-200)]",
+    },
+
+    "in-progress": {
+      border:
+        "border-[rgb(115_146_181_/_0.38)]",
+
+      background:
+        "bg-[linear-gradient(145deg,#232b40,#202438)]",
+
+      title:
+        "text-[var(--sky-200)]",
+
+      dot:
+        "border-[#a8d9f1]",
+
+      count:
+        "bg-[rgb(115_146_181_/_0.14)] text-[#a8d9f1]",
+    },
+
+    done: {
+      border:
+        "border-[rgb(112_180_191_/_0.34)]",
+
+      background:
+        "bg-[linear-gradient(145deg,#24333d,#202a36)]",
+
+      title:
+        "text-[#b9e4f8]",
+
+      dot:
+        "border-[#b9e4f8] bg-[#b9e4f8]",
+
+      count:
+        "bg-[rgb(185_228_248_/_0.10)] text-[#b9e4f8]",
+    },
+  };
+
+  const style =
+    styles[column.id];
+
   return (
     <div
-      ref={setNodeRef}
-      className={`rounded-2xl border transition-colors ${
+      ref={
+        setNodeRef
+      }
+      className={`overflow-hidden rounded-[18px] border transition-all ${
         highlighted
-          ? "border-[#7657ff]/50 bg-[#7657ff]/[0.04]"
-          : "border-white/[0.07] bg-[#0e0f14]"
-      }`}
+          ? "scale-[1.006] border-[rgb(177_138_235_/_0.56)] shadow-[0_0_0_4px_rgba(131,80,196,.07),0_24px_60px_-44px_rgba(109,54,222,.72)]"
+          : style.border
+      } ${style.background}`}
     >
-      <div className="flex items-center justify-between border-b border-white/[0.06] p-4">
+      {/*
+       * =========================================================
+       * COLUMN HEADER
+       * =========================================================
+       */}
+
+      <div className="flex min-h-[64px] items-center justify-between border-b border-[rgb(96_105_144_/_0.18)] px-4 py-3">
         <div>
-          <div className="flex items-center gap-2">
-            <ColumnDot
-              status={column.id}
+          <div className="flex items-center gap-2.5">
+            <span
+              className={`h-4 w-4 rounded-full border-2 ${style.dot}`}
             />
 
-            <h3 className="text-sm font-black text-white">
-              {column.title}
+            <h3
+              className={`db-display-title text-[1.25rem] ${style.title}`}
+            >
+              {
+                column.title
+              }
             </h3>
 
-            <span className="rounded-md bg-white/[0.045] px-2 py-1 text-[9px] font-black text-white/30">
-              {tasks.length}
+            <span
+              className={`flex h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-[8px] font-black ${style.count}`}
+            >
+              {
+                tasks.length
+              }
             </span>
           </div>
 
-          <p className="mt-1 text-[10px] text-white/20">
-            {column.description}
+          <p className="mt-1 text-[8px] font-semibold text-[var(--text-faint)]">
+            {
+              column.description
+            }
           </p>
         </div>
 
         <button
           type="button"
-          onClick={onAdd}
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-lg text-white/25 hover:bg-white/[0.05] hover:text-white"
+          onClick={
+            onAdd
+          }
+          aria-label={`Add task to ${column.title}`}
+          className="flex h-9 w-9 items-center justify-center rounded-xl border border-[rgb(96_105_144_/_0.22)] bg-[#202235]/55 text-[var(--denim-300)] transition-all hover:border-[rgb(177_138_235_/_0.36)] hover:bg-[rgb(131_80_196_/_0.12)] hover:text-[var(--pale-sky)]"
         >
-          +
+          <PlusIcon />
         </button>
       </div>
+
+      {/*
+       * =========================================================
+       * SORTABLE TASKS
+       * =========================================================
+       */}
 
       <SortableContext
         items={tasks.map(
@@ -1176,17 +2212,22 @@ function KanbanColumn({
           verticalListSortingStrategy
         }
       >
-        <div className="min-h-40 space-y-3 p-4">
-          {tasks.length > 0 ? (
+        <div className="min-h-[170px] space-y-2.5 p-3">
+          {tasks.length >
+          0 ? (
             tasks.map(
               (task) => (
                 <SortableTask
                   key={
                     task._id
                   }
-                  task={task}
+                  task={
+                    task
+                  }
                   onEdit={() =>
-                    onEdit(task)
+                    onEdit(
+                      task,
+                    )
                   }
                   onDelete={() =>
                     onDelete(
@@ -1197,7 +2238,7 @@ function KanbanColumn({
               ),
             )
           ) : (
-            <div className="flex min-h-28 items-center justify-center rounded-xl border border-dashed border-white/[0.07] text-xs font-semibold text-white/20">
+            <div className="flex min-h-[130px] items-center justify-center rounded-xl border border-dashed border-[rgb(96_105_144_/_0.22)] text-[9px] font-semibold text-[var(--text-faint)]">
               No tasks here
             </div>
           )}
@@ -1206,6 +2247,12 @@ function KanbanColumn({
     </div>
   );
 }
+
+/*
+ * =========================================================
+ * SORTABLE TASK
+ * =========================================================
+ */
 
 type SortableTaskProps = {
   task: Task;
@@ -1230,14 +2277,18 @@ function SortableTask({
 
     data: {
       type: "task",
-      taskId: task._id,
-      status: task.status,
+      taskId:
+        task._id,
+      status:
+        task.status,
     } satisfies DragData,
   });
 
   return (
     <article
-      ref={setNodeRef}
+      ref={
+        setNodeRef
+      }
       style={{
         transform:
           CSS.Transform.toString(
@@ -1248,12 +2299,18 @@ function SortableTask({
       }}
       {...attributes}
       {...listeners}
-      className={`cursor-grab rounded-xl border bg-[#14151b] p-4 ${
+      className={`group cursor-grab rounded-[14px] border bg-[#202235]/96 p-3.5 shadow-[0_14px_30px_-30px_rgba(0,0,0,.85)] transition-[border-color,background-color,opacity] active:cursor-grabbing ${
         isDragging
-          ? "opacity-25"
-          : "border-white/[0.07]"
+          ? "border-[rgb(177_138_235_/_0.40)] opacity-25"
+          : "border-[rgb(96_105_144_/_0.30)] hover:border-[rgb(131_80_196_/_0.42)] hover:bg-[#25273b]"
       }`}
     >
+      {/*
+       * =========================================================
+       * TASK TOP ROW
+       * =========================================================
+       */}
+
       <div className="flex items-start justify-between gap-3">
         <PriorityBadge
           priority={
@@ -1271,58 +2328,122 @@ function SortableTask({
         >
           <button
             type="button"
-            onClick={onEdit}
-            className="rounded-lg px-2 py-1 text-[10px] font-bold text-white/25 hover:bg-white/[0.05] hover:text-white"
+            onClick={
+              onEdit
+            }
+            aria-label={`Edit ${task.title}`}
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-[var(--text-faint)] transition-colors hover:bg-[rgb(201_224_235_/_0.05)] hover:text-[var(--pale-sky)]"
           >
-            Edit
+            <EditIcon />
           </button>
 
           <button
             type="button"
-            onClick={onDelete}
-            className="rounded-lg px-2 py-1 text-[10px] font-bold text-[#ff8994]/60 hover:bg-[#ff6b7a]/10 hover:text-[#ff8994]"
+            onClick={
+              onDelete
+            }
+            aria-label={`Delete ${task.title}`}
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-[rgb(212_77_92_/_0.65)] transition-colors hover:bg-[rgb(212_77_92_/_0.10)] hover:text-[#ff9aa3]"
           >
-            Delete
+            <TrashIcon />
           </button>
         </div>
       </div>
 
-      <h4 className="mt-4 text-sm font-black text-white">
-        {task.title}
+      {/*
+       * =========================================================
+       * TASK CONTENT
+       * =========================================================
+       */}
+
+      <h4 className="mt-3 text-xs font-black leading-5 text-[var(--pale-sky)]">
+        {
+          task.title
+        }
       </h4>
 
-      <p className="mt-2 line-clamp-2 text-xs leading-5 text-white/30">
+      <p className="mt-1.5 line-clamp-2 min-h-8 text-[9px] leading-4 text-[var(--text-muted)]">
         {task.description ||
           "No description."}
       </p>
 
       {task.labels.length >
         0 && (
-        <div className="mt-4 flex flex-wrap gap-1.5">
-          {task.labels.map(
-            (label) => (
-              <span
-                key={label}
-                className="rounded-md border border-white/[0.06] bg-white/[0.025] px-2 py-1 text-[8px] font-black uppercase text-white/30"
-              >
-                {label}
-              </span>
-            ),
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {task.labels
+            .slice(
+              0,
+              3,
+            )
+            .map(
+              (label) => (
+                <TaskLabel
+                  key={
+                    label
+                  }
+                  label={
+                    label
+                  }
+                />
+              ),
+            )}
+
+          {task.labels.length >
+            3 && (
+            <span className="rounded-lg border border-[rgb(96_105_144_/_0.20)] bg-[#303349] px-2 py-1 text-[7px] font-black text-[var(--text-faint)]">
+              +
+              {task.labels.length -
+                3}
+            </span>
           )}
         </div>
       )}
 
-      <div className="mt-5 flex items-center justify-between border-t border-white/[0.06] pt-4">
-        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#7657ff]/15 text-[8px] font-black text-[#a897ff]">
-          {task.assignee
-            ? getInitials(
-                task.assignee
-                  .name,
-              )
-            : "—"}
+      {/*
+       * =========================================================
+       * TASK FOOTER
+       * =========================================================
+       */}
+
+      <div className="mt-4 flex items-center justify-between gap-3 border-t border-[rgb(96_105_144_/_0.16)] pt-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <div
+            title={
+              task.assignee?.name ??
+              "Unassigned"
+            }
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[rgb(201_224_235_/_0.12)] bg-[linear-gradient(135deg,#526d95,#7657a6)] text-[7px] font-black text-[var(--sky-50)]"
+          >
+            {task.assignee
+              ? getInitials(
+                  task.assignee
+                    .name,
+                )
+              : "—"}
+          </div>
+
+          <span className="truncate text-[8px] font-semibold text-[var(--text-faint)]">
+            {task.assignee
+              ? task.assignee
+                  .name
+              : "Unassigned"}
+          </span>
         </div>
 
-        <span className="text-[9px] font-bold text-white/25">
+        <span
+          className={`flex shrink-0 items-center gap-1.5 text-[8px] font-bold ${
+            task.dueDate &&
+            isOverdue(
+              task.dueDate,
+            ) &&
+            task.status !==
+              "done"
+              ? "text-[var(--lilac-200)]"
+              : "text-[var(--denim-300)]"
+          }`}
+        >
+          <CalendarIcon />
+
           {task.dueDate
             ? formatDate(
                 task.dueDate,
@@ -1334,25 +2455,44 @@ function SortableTask({
   );
 }
 
+/*
+ * =========================================================
+ * TASK PREVIEW
+ * =========================================================
+ */
+
 function TaskPreview({
   task,
 }: {
   task: Task;
 }) {
   return (
-    <div className="w-80 rotate-1 rounded-xl border border-[#7657ff]/40 bg-[#181920] p-4 shadow-2xl">
+    <div className="w-full rotate-1 rounded-[14px] border border-[rgb(177_138_235_/_0.52)] bg-[#24233a] p-4 shadow-[0_24px_70px_-18px_rgba(0,0,0,.88)]">
       <PriorityBadge
         priority={
           task.priority
         }
       />
 
-      <h4 className="mt-4 text-sm font-black text-white">
-        {task.title}
+      <h4 className="mt-3 text-xs font-black text-[var(--pale-sky)]">
+        {
+          task.title
+        }
       </h4>
+
+      <p className="mt-1.5 line-clamp-1 text-[9px] text-[var(--text-muted)]">
+        {task.description ||
+          "No description."}
+      </p>
     </div>
   );
 }
+
+/*
+ * =========================================================
+ * PRIORITY BADGE
+ * =========================================================
+ */
 
 function PriorityBadge({
   priority,
@@ -1364,48 +2504,66 @@ function PriorityBadge({
     string
   > = {
     high:
-      "border-[#ff6b7a]/20 bg-[#ff6b7a]/10 text-[#ff8994]",
+      "border-[rgb(131_80_196_/_0.38)] bg-[#4a2d75] text-[var(--lilac-200)]",
 
     medium:
-      "border-[#ffbf69]/20 bg-[#ffbf69]/10 text-[#ffc980]",
+      "border-[rgb(115_146_181_/_0.36)] bg-[#304f70] text-[#b9e4f8]",
 
     low:
-      "border-[#49d6b0]/20 bg-[#49d6b0]/10 text-[#67dfbc]",
+      "border-[rgb(115_146_181_/_0.24)] bg-[#263b58] text-[var(--denim-300)]",
   };
 
   return (
     <span
-      className={`rounded-md border px-2 py-1 text-[8px] font-black uppercase tracking-[0.1em] ${styles[priority]}`}
+      className={`inline-flex rounded-lg border px-2.5 py-1 text-[7px] font-black uppercase tracking-[0.10em] ${styles[priority]}`}
     >
-      {priority}
+      {
+        priority
+      }
     </span>
   );
 }
 
-function ColumnDot({
-  status,
+/*
+ * =========================================================
+ * TASK LABEL
+ * =========================================================
+ */
+
+function TaskLabel({
+  label,
 }: {
-  status: TaskStatus;
+  label: string;
 }) {
-  const styles: Record<
-    TaskStatus,
-    string
-  > = {
-    todo: "bg-white/30",
+  const variant =
+    getVisualVariant(
+      label,
+    ) % 3;
 
-    "in-progress":
-      "bg-[#4c7dff]",
+  const styles = [
+    "border-[rgb(131_80_196_/_0.30)] bg-[#3d2c5f] text-[var(--lilac-200)]",
 
-    done:
-      "bg-[#49d6b0]",
-  };
+    "border-[rgb(115_146_181_/_0.30)] bg-[#2d4260] text-[#a8d9f1]",
+
+    "border-[rgb(201_224_235_/_0.20)] bg-[#30364e] text-[var(--sky-200)]",
+  ];
 
   return (
     <span
-      className={`h-2 w-2 rounded-full ${styles[status]}`}
-    />
+      className={`rounded-lg border px-2 py-1 text-[7px] font-black ${styles[variant]}`}
+    >
+      {
+        label
+      }
+    </span>
   );
 }
+
+/*
+ * =========================================================
+ * TASK MODAL
+ * =========================================================
+ */
 
 type TaskModalProps = {
   project: Project;
@@ -1417,8 +2575,16 @@ type TaskModalProps = {
   >;
 
   saving: boolean;
-
   editing: boolean;
+
+  errorField:
+    string | null;
+
+  setErrorField: Dispatch<
+    SetStateAction<string | null>
+  >;
+
+  shaking: boolean;
 
   onSubmit: (
     event: FormEvent<HTMLFormElement>,
@@ -1433,6 +2599,9 @@ function TaskModal({
   setForm,
   saving,
   editing,
+  errorField,
+  setErrorField,
+  shaking,
   onSubmit,
   onClose,
 }: TaskModalProps) {
@@ -1450,253 +2619,643 @@ function TaskModal({
     );
   };
 
+  const clearFieldError = (
+    field: string,
+  ) => {
+    if (
+      errorField ===
+      field
+    ) {
+      setErrorField(null);
+    }
+  };
+
+  const statusOptions: DropdownOption<TaskStatus>[] =
+    [
+      {
+        label: "To do",
+        value: "todo",
+      },
+      {
+        label:
+          "In progress",
+        value:
+          "in-progress",
+      },
+      {
+        label: "Done",
+        value: "done",
+      },
+    ];
+
+  const priorityOptions: DropdownOption<TaskPriority>[] =
+    [
+      {
+        label: "High",
+        value: "high",
+      },
+      {
+        label: "Medium",
+        value:
+          "medium",
+      },
+      {
+        label: "Low",
+        value: "low",
+      },
+    ];
+
+  const assigneeOptions: DropdownOption<string>[] =
+    [
+      {
+        label:
+          "Unassigned",
+        value: "",
+      },
+      ...project.members.map(
+        (member) => ({
+          label:
+            member.name,
+          value:
+            member._id,
+        }),
+      ),
+    ];
+
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-black/70 px-4 py-8 backdrop-blur-md"
+      className="fixed inset-0 z-[700] flex items-center justify-center overflow-y-auto bg-[#11111b]/82 px-4 py-8 backdrop-blur-md"
       onMouseDown={(
         event,
       ) => {
         if (
           event.target ===
-          event.currentTarget
+          event.currentTarget &&
+          !saving
         ) {
           onClose();
         }
       }}
     >
       <form
-        onSubmit={onSubmit}
-        className="w-full max-w-2xl rounded-2xl border border-white/[0.1] bg-[#111218] p-6"
+        onSubmit={
+          onSubmit
+        }
+        className={`db-modal w-full max-w-2xl overflow-visible rounded-[22px] ${
+          shaking
+            ? "modal-shake"
+            : ""
+        }`}
       >
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#8f7bff]">
-              {project.name}
-            </p>
+        {/*
+         * =========================================================
+         * MODAL HEADER
+         * =========================================================
+         */}
 
-            <h2 className="mt-2 text-xl font-black text-white">
-              {editing
-                ? "Edit task"
-                : "Create task"}
-            </h2>
+        <div
+          className="relative overflow-hidden rounded-t-[22px] border-b border-[var(--border-subtle)] px-5 py-5 sm:px-6"
+          style={{
+            backgroundImage: `
+              radial-gradient(
+                circle at 90% 0%,
+                rgba(131,80,196,.18),
+                transparent 14rem
+              ),
+              linear-gradient(
+                135deg,
+                #25203e,
+                #211f35
+              )
+            `,
+          }}
+        >
+          <div className="relative z-[1] flex items-start justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-[rgb(177_138_235_/_0.24)] bg-[rgb(131_80_196_/_0.16)] text-[var(--lilac-200)]">
+                <TaskIcon />
+              </div>
+
+              <div>
+                <p className="text-[8px] font-black uppercase tracking-[0.18em] text-[var(--lilac-300)]">
+                  {
+                    project.name
+                  }
+                </p>
+
+                <h2 className="db-display-title mt-1 text-xl">
+                  {editing
+                    ? "Edit task"
+                    : "Create task"}
+                </h2>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={
+                onClose
+              }
+              disabled={
+                saving
+              }
+              aria-label="Close task modal"
+              className="flex h-9 w-9 items-center justify-center rounded-xl text-[var(--text-muted)] transition-colors hover:bg-[rgb(201_224_235_/_0.06)] hover:text-[var(--pale-sky)] disabled:opacity-40"
+            >
+              <CloseIcon />
+            </button>
           </div>
-
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-white/30 hover:text-white"
-          >
-            ✕
-          </button>
         </div>
 
-        <div className="mt-6 space-y-5">
-          <FieldLabel label="Title">
-            <input
-              required
-              value={
-                form.title
-              }
-              onChange={(
-                event,
-              ) =>
-                updateForm({
-                  title:
-                    event.target
-                      .value,
-                })
-              }
-              className="input-style"
-            />
-          </FieldLabel>
+        {/*
+         * =========================================================
+         * MODAL BODY
+         * =========================================================
+         */}
 
-          <FieldLabel label="Description">
-            <textarea
-              rows={4}
-              value={
-                form.description
-              }
-              onChange={(
-                event,
-              ) =>
-                updateForm({
-                  description:
-                    event.target
-                      .value,
-                })
-              }
-              className="input-style h-auto resize-none py-3"
-            />
-          </FieldLabel>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <FieldLabel label="Status">
-              <select
-                value={
-                  form.status
-                }
-                onChange={(
-                  event,
-                ) =>
-                  updateForm({
-                    status:
-                      event
-                        .target
-                        .value as TaskStatus,
-                  })
-                }
-                className="input-style"
-              >
-                <option value="todo">
-                  To do
-                </option>
-
-                <option value="in-progress">
-                  In progress
-                </option>
-
-                <option value="done">
-                  Done
-                </option>
-              </select>
-            </FieldLabel>
-
-            <FieldLabel label="Priority">
-              <select
-                value={
-                  form.priority
-                }
-                onChange={(
-                  event,
-                ) =>
-                  updateForm({
-                    priority:
-                      event
-                        .target
-                        .value as TaskPriority,
-                  })
-                }
-                className="input-style"
-              >
-                <option value="high">
-                  High
-                </option>
-
-                <option value="medium">
-                  Medium
-                </option>
-
-                <option value="low">
-                  Low
-                </option>
-              </select>
-            </FieldLabel>
-
-            <FieldLabel label="Assignee">
-              <select
-                value={
-                  form.assignee
-                }
-                onChange={(
-                  event,
-                ) =>
-                  updateForm({
-                    assignee:
-                      event
-                        .target
-                        .value,
-                  })
-                }
-                className="input-style"
-              >
-                <option value="">
-                  Unassigned
-                </option>
-
-                {project.members.map(
-                  (member) => (
-                    <option
-                      key={
-                        member._id
-                      }
-                      value={
-                        member._id
-                      }
-                    >
-                      {
-                        member.name
-                      }
-                    </option>
-                  ),
-                )}
-              </select>
-            </FieldLabel>
-
-            <FieldLabel label="Due date">
+        <div className="p-5 sm:p-6">
+          <div className="space-y-5">
+            <FieldLabel
+              label="Title"
+            >
               <input
-                type="date"
+                required
                 value={
-                  form.dueDate
+                  form.title
+                }
+                onChange={(
+                  event,
+                ) => {
+                  updateForm({
+                    title:
+                      event.target
+                        .value,
+                  });
+
+                  clearFieldError(
+                    "title",
+                  );
+                }}
+                placeholder="Task title"
+                className={`input-style ${
+                  errorField ===
+                  "title"
+                    ? "input-error"
+                    : ""
+                }`}
+              />
+
+              {errorField ===
+                "title" && (
+                <p className="mt-2 text-[9px] font-bold normal-case tracking-normal text-[#ff9aa3]">
+                  This task title is already assigned to this user in this project.
+                </p>
+              )}
+            </FieldLabel>
+
+            <FieldLabel
+              label="Description"
+            >
+              <textarea
+                rows={4}
+                value={
+                  form.description
                 }
                 onChange={(
                   event,
                 ) =>
                   updateForm({
-                    dueDate:
+                    description:
                       event.target
                         .value,
                   })
                 }
+                placeholder="Add useful task details..."
+                className="input-style h-auto resize-none py-3"
+              />
+            </FieldLabel>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FieldLabel
+                label="Status"
+              >
+                <CustomDropdown
+                  value={
+                    form.status
+                  }
+                  options={
+                    statusOptions
+                  }
+                  onChange={(
+                    value,
+                  ) =>
+                    updateForm({
+                      status:
+                        value,
+                    })
+                  }
+                  icon={
+                    <StatusIcon />
+                  }
+                />
+              </FieldLabel>
+
+              <FieldLabel
+                label="Priority"
+              >
+                <CustomDropdown
+                  value={
+                    form.priority
+                  }
+                  options={
+                    priorityOptions
+                  }
+                  onChange={(
+                    value,
+                  ) =>
+                    updateForm({
+                      priority:
+                        value,
+                    })
+                  }
+                  icon={
+                    <PriorityIcon />
+                  }
+                />
+              </FieldLabel>
+
+              <FieldLabel
+                label="Assignee"
+              >
+                <CustomDropdown
+                  value={
+                    form.assignee
+                  }
+                  options={
+                    assigneeOptions
+                  }
+                  onChange={(
+                    value,
+                  ) => {
+                    updateForm({
+                      assignee:
+                        value,
+                    });
+
+                    clearFieldError(
+                      "assignee",
+                    );
+                  }}
+                  icon={
+                    <UserIcon />
+                  }
+                  error={
+                    errorField ===
+                    "assignee"
+                  }
+                />
+              </FieldLabel>
+
+              <FieldLabel
+                label="Due date"
+              >
+                <div className="relative">
+                  <input
+                    required
+                    type="date"
+                    value={
+                      form.dueDate
+                    }
+                    onChange={(
+                      event,
+                    ) => {
+                      updateForm({
+                        dueDate:
+                          event.target
+                            .value,
+                      });
+
+                      clearFieldError(
+                        "dueDate",
+                      );
+                    }}
+                    className={`input-style ${
+                      errorField ===
+                      "dueDate"
+                        ? "input-error"
+                        : ""
+                    }`}
+                    style={{
+                      colorScheme:
+                        "dark",
+                    }}
+                  />
+                </div>
+
+                {errorField ===
+                  "dueDate" && (
+                  <p className="mt-2 text-[9px] font-bold normal-case tracking-normal text-[#ff9aa3]">
+                    A due date is required for every task.
+                  </p>
+                )}
+              </FieldLabel>
+            </div>
+
+            <FieldLabel
+              label="Labels"
+            >
+              <input
+                value={
+                  form.labels
+                }
+                onChange={(
+                  event,
+                ) =>
+                  updateForm({
+                    labels:
+                      event.target
+                        .value,
+                  })
+                }
+                placeholder="React, API, Backend"
                 className="input-style"
               />
+
+              <p className="mt-2 text-[8px] font-semibold normal-case tracking-normal text-[var(--text-faint)]">
+                Separate labels with commas.
+              </p>
             </FieldLabel>
           </div>
 
-          <FieldLabel label="Labels">
-            <input
-              value={
-                form.labels
-              }
-              onChange={(
-                event,
-              ) =>
-                updateForm({
-                  labels:
-                    event.target
-                      .value,
-                })
-              }
-              placeholder="React, API, Backend"
-              className="input-style"
-            />
-          </FieldLabel>
-        </div>
+          {/*
+           * =========================================================
+           * MODAL ACTIONS
+           * =========================================================
+           */}
 
-        <div className="mt-7 flex justify-end gap-3 border-t border-white/[0.07] pt-5">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-xl border border-white/[0.08] px-5 py-3 text-xs font-black text-white/45"
-          >
-            Cancel
-          </button>
+          <div className="mt-7 flex justify-end gap-3 border-t border-[var(--border-subtle)] pt-5">
+            <button
+              type="button"
+              onClick={
+                onClose
+              }
+              disabled={
+                saving
+              }
+              className="rounded-xl border border-[rgb(96_105_144_/_0.28)] bg-[#25283b] px-5 py-3 text-[10px] font-black text-[var(--text-secondary)] transition-colors hover:bg-[#292c41] hover:text-[var(--pale-sky)] disabled:opacity-40"
+            >
+              Cancel
+            </button>
 
-          <button
-            type="submit"
-            disabled={saving}
-            className="rounded-xl bg-[#7657ff] px-5 py-3 text-xs font-black text-white disabled:opacity-50"
-          >
-            {saving
-              ? "Saving..."
-              : editing
-                ? "Save changes"
-                : "Create task"}
-          </button>
+            <button
+              type="submit"
+              disabled={
+                saving
+              }
+              className="inline-flex min-w-[128px] items-center justify-center gap-2 rounded-xl border border-[rgb(177_138_235_/_0.50)] bg-[linear-gradient(135deg,#8350c4,#6d36de)] px-5 py-3 text-[10px] font-black text-[var(--sky-50)] shadow-[0_14px_30px_-18px_rgba(109,54,222,.75)] transition-all hover:brightness-110 disabled:opacity-50"
+            >
+              {saving ? (
+                <>
+                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+
+                  Saving...
+                </>
+              ) : editing ? (
+                <>
+                  <SaveIcon />
+
+                  Save changes
+                </>
+              ) : (
+                <>
+                  <PlusIcon />
+
+                  Create task
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </form>
     </div>
   );
 }
+
+/*
+ * =========================================================
+ * CUSTOM DROPDOWN
+ * =========================================================
+ */
+
+function CustomDropdown<
+  T extends string,
+>({
+  value,
+  options,
+  onChange,
+  icon,
+  error = false,
+}: {
+  value: T;
+  options: DropdownOption<T>[];
+  onChange: (
+    value: T,
+  ) => void;
+  icon?: ReactNode;
+  error?: boolean;
+}) {
+  const [
+    open,
+    setOpen,
+  ] = useState(false);
+
+  const containerRef =
+    useRef<HTMLDivElement>(
+      null,
+    );
+
+  const currentOption =
+    options.find(
+      (option) =>
+        option.value ===
+        value,
+    ) ?? options[0];
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const handleMouseDown = (
+      event: MouseEvent,
+    ) => {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(
+          event.target as Node,
+        )
+      ) {
+        setOpen(false);
+      }
+    };
+
+    const handleKeyDown = (
+      event: KeyboardEvent,
+    ) => {
+      if (
+        event.key ===
+        "Escape"
+      ) {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener(
+      "mousedown",
+      handleMouseDown,
+    );
+
+    window.addEventListener(
+      "keydown",
+      handleKeyDown,
+    );
+
+    return () => {
+      document.removeEventListener(
+        "mousedown",
+        handleMouseDown,
+      );
+
+      window.removeEventListener(
+        "keydown",
+        handleKeyDown,
+      );
+    };
+  }, [open]);
+
+  return (
+    <div
+      ref={
+        containerRef
+      }
+      className={`relative ${
+        open
+          ? "z-[40]"
+          : "z-0"
+      }`}
+    >
+      <button
+        type="button"
+        onClick={() =>
+          setOpen(
+            (currentOpen) =>
+              !currentOpen,
+          )
+        }
+        aria-haspopup="listbox"
+        aria-expanded={
+          open
+        }
+        className={`flex h-12 w-full items-center rounded-xl border bg-[#202235]/90 px-4 text-left transition-all ${
+          error
+            ? "input-error"
+            : open
+              ? "border-[rgb(177_138_235_/_0.48)] shadow-[0_0_0_4px_rgba(131,80,196,.08)]"
+              : "border-[rgb(96_105_144_/_0.30)] hover:border-[rgb(115_146_181_/_0.44)]"
+        }`}
+      >
+        {icon && (
+          <span className="flex shrink-0 items-center justify-center text-[var(--denim-300)]">
+            {icon}
+          </span>
+        )}
+
+        <span
+          className={`min-w-0 flex-1 truncate text-xs font-bold text-[var(--text-secondary)] ${
+            icon
+              ? "ml-2.5"
+              : ""
+          }`}
+        >
+          {
+            currentOption
+              .label
+          }
+        </span>
+
+        <span
+          className={`ml-3 shrink-0 text-[var(--denim-300)] transition-transform duration-200 ${
+            open
+              ? "rotate-180"
+              : ""
+          }`}
+        >
+          <ChevronDownIcon />
+        </span>
+      </button>
+
+      {open && (
+        <div
+          role="listbox"
+          className="absolute left-0 right-0 top-[calc(100%+7px)] z-[50] max-h-56 overflow-y-auto rounded-xl border border-[rgb(115_146_181_/_0.28)] bg-[#1b1d2c]/[0.99] p-1.5 shadow-[0_24px_60px_-16px_rgba(0,0,0,.88)] backdrop-blur-xl"
+        >
+          {options.map(
+            (option) => {
+              const active =
+                option.value ===
+                value;
+
+              return (
+                <button
+                  key={
+                    option.value
+                  }
+                  type="button"
+                  role="option"
+                  aria-selected={
+                    active
+                  }
+                  onClick={() => {
+                    onChange(
+                      option.value,
+                    );
+
+                    setOpen(
+                      false,
+                    );
+                  }}
+                  className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left text-[10px] font-bold transition-colors ${
+                    active
+                      ? "bg-[linear-gradient(135deg,rgba(131,80,196,.30),rgba(109,54,222,.18))] text-[var(--lilac-200)]"
+                      : "text-[var(--text-secondary)] hover:bg-[rgb(201_224_235_/_0.05)] hover:text-[var(--pale-sky)]"
+                  }`}
+                >
+                  <span className="truncate">
+                    {
+                      option.label
+                    }
+                  </span>
+
+                  {active && (
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[rgb(131_80_196_/_0.22)] text-[var(--lilac-200)]">
+                      <CheckIcon />
+                    </span>
+                  )}
+                </button>
+              );
+            },
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/*
+ * =========================================================
+ * FIELD LABEL
+ * =========================================================
+ */
 
 function FieldLabel({
   label,
@@ -1706,15 +3265,27 @@ function FieldLabel({
   children: ReactNode;
 }) {
   return (
-    <label className="block text-[10px] font-black uppercase tracking-[0.14em] text-white/35">
-      {label}
+    <label className="block">
+      <span className="text-[8px] font-black uppercase tracking-[0.14em] text-[var(--text-muted)]">
+        {
+          label
+        }
+      </span>
 
       <div className="mt-2">
-        {children}
+        {
+          children
+        }
       </div>
     </label>
   );
 }
+
+/*
+ * =========================================================
+ * HELPERS
+ * =========================================================
+ */
 
 function getInitials(
   name: string,
@@ -1722,13 +3293,97 @@ function getInitials(
   return name
     .trim()
     .split(/\s+/)
-    .slice(0, 2)
-    .map((part) =>
-      part.charAt(0),
+    .slice(
+      0,
+      2,
+    )
+    .map(
+      (part) =>
+        part.charAt(
+          0,
+        ),
     )
     .join("")
     .toUpperCase();
 }
+
+function getVisualVariant(
+  value: string,
+) {
+  let total = 0;
+
+  for (
+    let index = 0;
+    index <
+    value.length;
+    index += 1
+  ) {
+    total +=
+      value.charCodeAt(
+        index,
+      );
+  }
+
+  return total % 5;
+}
+
+function getMemberGradient(
+  value: string,
+) {
+  const gradients = [
+    "linear-gradient(135deg,#8350c4,#6d36de)",
+    "linear-gradient(135deg,#7392b5,#506e91)",
+    "linear-gradient(135deg,#765d7e,#8350c4)",
+    "linear-gradient(135deg,#506e91,#402b47)",
+  ];
+
+  let total = 0;
+
+  for (
+    let index = 0;
+    index <
+    value.length;
+    index += 1
+  ) {
+    total +=
+      value.charCodeAt(
+        index,
+      );
+  }
+
+  return gradients[
+    total %
+      gradients.length
+  ];
+}
+
+function isOverdue(
+  value: string,
+) {
+  const due =
+    new Date(value);
+
+  const today =
+    new Date();
+
+  today.setHours(
+    0,
+    0,
+    0,
+    0,
+  );
+
+  return (
+    due.getTime() <
+    today.getTime()
+  );
+}
+
+/*
+ * =========================================================
+ * DATE HELPERS
+ * =========================================================
+ */
 
 function formatDate(
   value: string,
@@ -1736,11 +3391,321 @@ function formatDate(
   return new Intl.DateTimeFormat(
     "en-US",
     {
-      month: "short",
-      day: "numeric",
+      month:
+        "short",
+      day:
+        "numeric",
     },
   ).format(
     new Date(value),
+  );
+}
+
+/*
+ * =========================================================
+ * ICONS
+ * =========================================================
+ */
+
+function SearchIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--denim-300)]"
+      aria-hidden="true"
+    >
+      <circle
+        cx="11"
+        cy="11"
+        r="6"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      />
+
+      <path
+        d="m16 16 4 4"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function PlusIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      className="h-4 w-4"
+      aria-hidden="true"
+    >
+      <path
+        d="M12 5v14M5 12h14"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function ChevronLeftIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      className="h-3.5 w-3.5 transition-transform group-hover:-translate-x-0.5"
+      aria-hidden="true"
+    >
+      <path
+        d="m15 6-6 6 6 6"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function ChevronDownIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      className="h-4 w-4"
+      aria-hidden="true"
+    >
+      <path
+        d="m7 9 5 5 5-5"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function CalendarIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      className="h-3.5 w-3.5"
+      aria-hidden="true"
+    >
+      <path
+        d="M7 3v3M17 3v3M4 9h16M5 5h14v15H5V5Z"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function EditIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      className="h-3.5 w-3.5"
+      aria-hidden="true"
+    >
+      <path
+        d="m5 16-.7 3.7L8 19l10-10-3-3L5 16ZM13.8 7.2l3 3"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      className="h-3.5 w-3.5"
+      aria-hidden="true"
+    >
+      <path
+        d="M5 7h14M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      className="h-4 w-4"
+      aria-hidden="true"
+    >
+      <path
+        d="m6 6 12 12M18 6 6 18"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      className="h-3 w-3"
+      aria-hidden="true"
+    >
+      <path
+        d="m7 12 3 3 7-7"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function SaveIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      className="h-4 w-4"
+      aria-hidden="true"
+    >
+      <path
+        d="M5 4h12l2 2v14H5V4Z"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinejoin="round"
+      />
+
+      <path
+        d="M8 4v6h8V4M8 20v-6h8v6"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function TaskIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      className="h-5 w-5"
+      aria-hidden="true"
+    >
+      <rect
+        x="4"
+        y="4"
+        width="16"
+        height="16"
+        rx="3"
+        stroke="currentColor"
+        strokeWidth="1.7"
+      />
+
+      <path
+        d="m8 12 2.2 2.2L16 8.5"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function StatusIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      className="h-4 w-4"
+      aria-hidden="true"
+    >
+      <circle
+        cx="12"
+        cy="12"
+        r="7"
+        stroke="currentColor"
+        strokeWidth="1.7"
+      />
+
+      <path
+        d="M12 8v4l3 2"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function PriorityIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      className="h-4 w-4"
+      aria-hidden="true"
+    >
+      <path
+        d="M6 20V5M6 6h10l-2.5 3L16 12H6"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function UserIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      className="h-4 w-4"
+      aria-hidden="true"
+    >
+      <circle
+        cx="12"
+        cy="8"
+        r="3"
+        stroke="currentColor"
+        strokeWidth="1.7"
+      />
+
+      <path
+        d="M6 19c.5-3.2 2.5-5 6-5s5.5 1.8 6 5"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+      />
+    </svg>
   );
 }
 

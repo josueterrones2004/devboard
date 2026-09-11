@@ -1,7 +1,431 @@
 @import "tailwindcss";
 
+/*
+ * =========================================================
+ * DEVBOARD — COLOR SYSTEM
+ * =========================================================
+ */
+
 :root {
-  font-family:
+  /*
+   * =========================================================
+   * ORIGINAL REFERENCE PALETTE
+   * =========================================================
+   */
+
+  --pale-sky: #c9e0eb;
+  --dusty-denim: #7392b5;
+  --deep-lilac: #8350c4;
+  --midnight-violet: #402b47;
+  --shadow-grey: #262423;
+
+  /*
+   * =========================================================
+   * PALE SKY SCALE
+   * =========================================================
+   */
+
+  --sky-50: #f5fbfd;
+  --sky-100: #e8f4f8;
+  --sky-150: #dbeaf1;
+  --sky-200: #c9e0eb;
+  --sky-300: #b5d4e2;
+  --sky-400: #9fc5d8;
+  --sky-500: #87b4cd;
+
+  /*
+   * =========================================================
+   * DUSTY DENIM SCALE
+   * =========================================================
+   */
+
+  --denim-200: #aec2d8;
+  --denim-300: #94aecb;
+  --denim-400: #7f9dbd;
+  --denim-500: #7392b5;
+  --denim-600: #6282a7;
+  --denim-700: #506e91;
+  --denim-800: #405a78;
+
+  /*
+   * =========================================================
+   * DEEP LILAC SCALE
+   * =========================================================
+   */
+
+  --lilac-200: #c6a8ee;
+  --lilac-300: #b18aeb;
+  --lilac-400: #9c69e2;
+  --lilac-500: #8350c4;
+  --lilac-600: #7745bc;
+  --lilac-700: #6639a5;
+  --lilac-800: #522d87;
+
+  /*
+   * =========================================================
+   * MIDNIGHT VIOLET SCALE
+   * =========================================================
+   */
+
+  --violet-300: #765d7e;
+  --violet-400: #674c70;
+  --violet-500: #563c5e;
+  --violet-600: #49314f;
+  --violet-700: #402b47;
+  --violet-800: #35233c;
+  --violet-900: #291b30;
+
+  /*
+   * =========================================================
+   * UI NEUTRALS
+   *
+   * These are intentionally more blue/violet than before.
+   * Shadow Grey is no longer used as the whole interface.
+   * =========================================================
+   */
+
+  --neutral-1000: #11121a;
+  --neutral-950: #151620;
+  --neutral-900: #1a1c29;
+  --neutral-850: #202230;
+  --neutral-800: #262938;
+  --neutral-750: #2c3042;
+  --neutral-700: #34384c;
+  --neutral-650: #3e435a;
+  --neutral-600: #4a5069;
+  --neutral-500: #626a86;
+
+  /*
+   * =========================================================
+   * APP BACKGROUNDS
+   * =========================================================
+   */
+
+  --app-background:
+    var(--neutral-950);
+
+  --app-background-deep:
+    var(--neutral-1000);
+
+  --app-background-blue:
+    #1a1f31;
+
+  --app-background-purple:
+    #211a31;
+
+  /*
+   * =========================================================
+   * SURFACES
+   * =========================================================
+   */
+
+  --surface-deep:
+    #181923;
+
+  --surface:
+    #212331;
+
+  --surface-soft:
+    #252838;
+
+  --surface-raised:
+    #2a2e40;
+
+  --surface-hover:
+    #32374c;
+
+  --surface-active:
+    #3a3f57;
+
+  --surface-blue:
+    #28354a;
+
+  --surface-blue-soft:
+    #253145;
+
+  --surface-purple:
+    #332747;
+
+  --surface-purple-soft:
+    #2c243d;
+
+  --surface-lilac:
+    #3b2c54;
+
+  /*
+   * =========================================================
+   * TEXT
+   * =========================================================
+   */
+
+  --text-primary:
+    #dbeaf1;
+
+  --text-secondary:
+    #b8cbd8;
+
+  --text-muted:
+    #8fa1b2;
+
+  --text-faint:
+    #69798a;
+
+  --text-disabled:
+    #4e5968;
+
+  /*
+   * =========================================================
+   * ACCENTS
+   * =========================================================
+   */
+
+  --accent-primary:
+    var(--lilac-500);
+
+  --accent-primary-hover:
+    var(--lilac-400);
+
+  --accent-primary-bright:
+    var(--lilac-300);
+
+  --accent-secondary:
+    var(--denim-500);
+
+  --accent-secondary-bright:
+    var(--denim-300);
+
+  --accent-light:
+    var(--pale-sky);
+
+  --accent-deep:
+    var(--midnight-violet);
+
+  /*
+   * =========================================================
+   * SOFT ACCENT BACKGROUNDS
+   * =========================================================
+   */
+
+  --accent-soft:
+    rgb(131 80 196 / 0.18);
+
+  --accent-soft-strong:
+    rgb(131 80 196 / 0.30);
+
+  --accent-soft-bright:
+    rgb(177 138 235 / 0.18);
+
+  --denim-soft:
+    rgb(115 146 181 / 0.18);
+
+  --denim-soft-strong:
+    rgb(115 146 181 / 0.30);
+
+  --sky-soft:
+    rgb(201 224 235 / 0.12);
+
+  --sky-soft-strong:
+    rgb(201 224 235 / 0.22);
+
+  --violet-soft:
+    rgb(64 43 71 / 0.32);
+
+  /*
+   * =========================================================
+   * STATUS COLORS
+   * =========================================================
+   */
+
+  --status-planning:
+    var(--denim-300);
+
+  --status-active:
+    var(--lilac-300);
+
+  --status-completed:
+    var(--sky-300);
+
+  --priority-low:
+    var(--denim-300);
+
+  --priority-medium:
+    var(--lilac-300);
+
+  --priority-high:
+    var(--lilac-200);
+
+  /*
+   * =========================================================
+   * BORDERS
+   * =========================================================
+   */
+
+  --border-subtle:
+    rgb(201 224 235 / 0.08);
+
+  --border-soft:
+    rgb(201 224 235 / 0.13);
+
+  --border-medium:
+    rgb(201 224 235 / 0.20);
+
+  --border-strong:
+    rgb(177 138 235 / 0.42);
+
+  --border-purple:
+    rgb(156 105 226 / 0.45);
+
+  --border-blue:
+    rgb(148 174 203 / 0.42);
+
+  --border-sky:
+    rgb(201 224 235 / 0.45);
+
+  /*
+   * =========================================================
+   * SHADOWS
+   * =========================================================
+   */
+
+  --shadow-dark:
+    rgb(7 8 15 / 0.72);
+
+  --shadow-purple:
+    rgb(131 80 196 / 0.38);
+
+  --shadow-purple-bright:
+    rgb(177 138 235 / 0.26);
+
+  --shadow-blue:
+    rgb(115 146 181 / 0.30);
+
+  /*
+   * =========================================================
+   * LEGACY COMPATIBILITY
+   *
+   * Existing components may still use these names.
+   * Keep them until the visual redesign is complete.
+   * =========================================================
+   */
+
+  --brand-linen:
+    var(--pale-sky);
+
+  --brand-almond:
+    var(--dusty-denim);
+
+  --brand-lobster:
+    var(--deep-lilac);
+
+  --brand-wine:
+    var(--midnight-violet);
+
+  --brand-midnight:
+    var(--shadow-grey);
+
+  --linen:
+    var(--pale-sky);
+
+  --almond-silk:
+    var(--dusty-denim);
+
+  --lobster-pink:
+    var(--deep-lilac);
+
+  --wine-plum:
+    var(--midnight-violet);
+
+  --background:
+    var(--app-background);
+
+  --background-deep:
+    var(--app-background-deep);
+
+  --accent:
+    var(--accent-primary);
+
+  --accent-hover:
+    var(--accent-primary-hover);
+
+  --secondary-accent:
+    var(--accent-secondary);
+
+  --secondary-soft:
+    var(--denim-soft);
+
+  --danger:
+    var(--lilac-300);
+
+  /*
+   * =========================================================
+   * OLD DB SCALE
+   * =========================================================
+   */
+
+  --db-50:
+    var(--sky-50);
+
+  --db-100:
+    var(--sky-100);
+
+  --db-150:
+    var(--sky-150);
+
+  --db-200:
+    var(--sky-200);
+
+  --db-250:
+    var(--sky-300);
+
+  --db-300:
+    var(--denim-300);
+
+  --db-350:
+    var(--denim-400);
+
+  --db-400:
+    var(--lilac-200);
+
+  --db-450:
+    var(--lilac-300);
+
+  --db-500:
+    var(--lilac-400);
+
+  --db-550:
+    var(--lilac-500);
+
+  --db-600:
+    var(--lilac-600);
+
+  --db-650:
+    var(--lilac-700);
+
+  --db-700:
+    var(--violet-300);
+
+  --db-750:
+    var(--violet-400);
+
+  --db-800:
+    var(--violet-500);
+
+  --db-850:
+    var(--violet-600);
+
+  --db-900:
+    var(--violet-700);
+
+  --db-950:
+    var(--neutral-950);
+
+  /*
+   * =========================================================
+   * TYPOGRAPHY
+   * =========================================================
+   */
+
+  --font-ui:
     Inter,
     ui-sans-serif,
     system-ui,
@@ -10,66 +434,735 @@
     "Segoe UI",
     sans-serif;
 
-  color: #f7f7fa;
-  background: #0b0c10;
-  color-scheme: dark;
+  --font-display:
+    Georgia,
+    Cambria,
+    "Times New Roman",
+    serif;
 
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  font-family:
+    var(--font-ui);
+
+  color:
+    var(--text-primary);
+
+  background:
+    var(--app-background);
+
+  color-scheme:
+    dark;
+
+  font-synthesis:
+    none;
+
+  text-rendering:
+    optimizeLegibility;
+
+  -webkit-font-smoothing:
+    antialiased;
+
+  -moz-osx-font-smoothing:
+    grayscale;
 }
 
+/*
+ * =========================================================
+ * RESET
+ * =========================================================
+ */
+
 * {
-  box-sizing: border-box;
+  box-sizing:
+    border-box;
 }
 
 html {
-  min-width: 320px;
-  min-height: 100%;
-  background: #0b0c10;
-  overscroll-behavior: none;
+  min-width:
+    320px;
+
+  min-height:
+    100%;
+
+  background:
+    var(--app-background-deep);
+
+  overscroll-behavior:
+    none;
 }
 
 body {
-  min-width: 320px;
-  min-height: 100vh;
-  margin: 0;
-  overflow-x: hidden;
+  min-width:
+    320px;
 
-  color: #f7f7fa;
-  background: #0b0c10;
+  min-height:
+    100vh;
 
-  overscroll-behavior: none;
+  margin:
+    0;
+
+  overflow-x:
+    hidden;
+
+  color:
+    var(--text-primary);
+
+  /*
+   * =========================================================
+   * GLOBAL CSS BACKGROUND
+   *
+   * Brighter and more visible than the previous version.
+   * No generated images are used.
+   * =========================================================
+   */
+
+  background-image:
+    radial-gradient(
+      ellipse at 48% -10%,
+      rgb(115 146 181 / 0.32),
+      transparent 38rem
+    ),
+    radial-gradient(
+      ellipse at 87% 8%,
+      rgb(131 80 196 / 0.27),
+      transparent 35rem
+    ),
+    radial-gradient(
+      ellipse at 7% 67%,
+      rgb(64 43 71 / 0.38),
+      transparent 40rem
+    ),
+    radial-gradient(
+      ellipse at 74% 95%,
+      rgb(115 146 181 / 0.18),
+      transparent 36rem
+    ),
+    linear-gradient(
+      135deg,
+      #171824 0%,
+      #1d2030 38%,
+      #211b30 70%,
+      #181923 100%
+    );
+
+  background-attachment:
+    fixed;
+
+  overscroll-behavior:
+    none;
+}
+
+body::before {
+  position:
+    fixed;
+
+  inset:
+    0;
+
+  z-index:
+    -1;
+
+  pointer-events:
+    none;
+
+  content:
+    "";
+
+  background-image:
+    linear-gradient(
+      rgb(201 224 235 / 0.028)
+        1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      90deg,
+      rgb(201 224 235 / 0.028)
+        1px,
+      transparent 1px
+    );
+
+  background-size:
+    52px 52px;
+
+  mask-image:
+    linear-gradient(
+      to bottom,
+      black,
+      rgb(0 0 0 / 0.75) 65%,
+      transparent
+    );
 }
 
 #root {
-  min-height: 100vh;
-  background: #0b0c10;
-  overscroll-behavior: none;
+  min-height:
+    100vh;
+
+  background:
+    transparent;
 }
 
 button,
 input,
 textarea,
 select {
-  font: inherit;
+  font:
+    inherit;
+}
+
+button {
+  color:
+    inherit;
 }
 
 button,
 a {
-  -webkit-tap-highlight-color: transparent;
+  -webkit-tap-highlight-color:
+    transparent;
 }
 
 ::selection {
-  color: white;
-  background: #7657ff;
+  color:
+    var(--neutral-1000);
+
+  background:
+    var(--pale-sky);
 }
 
-@media (prefers-reduced-motion: reduce) {
+/*
+ * =========================================================
+ * TYPOGRAPHY HELPERS
+ * =========================================================
+ */
+
+.db-display-title {
+  font-family:
+    var(--font-display);
+
+  font-weight:
+    700;
+
+  letter-spacing:
+    -0.035em;
+
+  color:
+    var(--pale-sky);
+}
+
+/*
+ * =========================================================
+ * SCROLLBAR
+ * =========================================================
+ */
+
+* {
+  scrollbar-width:
+    thin;
+
+  scrollbar-color:
+    var(--neutral-600)
+    var(--neutral-950);
+}
+
+::-webkit-scrollbar {
+  width:
+    10px;
+
+  height:
+    10px;
+}
+
+::-webkit-scrollbar-track {
+  background:
+    var(--neutral-950);
+}
+
+::-webkit-scrollbar-thumb {
+  border:
+    2px solid
+    var(--neutral-950);
+
+  border-radius:
+    999px;
+
+  background:
+    var(--neutral-600);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background:
+    var(--dusty-denim);
+}
+
+/*
+ * =========================================================
+ * FORM CONTROLS
+ * =========================================================
+ */
+
+.input-style {
+  display:
+    block;
+
+  width:
+    100%;
+
+  min-height:
+    3rem;
+
+  border:
+    1px solid
+    var(--border-soft);
+
+  border-radius:
+    0.8rem;
+
+  padding:
+    0.75rem 1rem;
+
+  outline:
+    none;
+
+  color:
+    var(--text-primary);
+
+  background:
+    var(--surface-raised);
+
+  font-size:
+    0.875rem;
+
+  font-weight:
+    600;
+
+  line-height:
+    1.5;
+
+  box-shadow:
+    inset 0 1px 0
+    rgb(201 224 235 / 0.035);
+
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.input-style:hover {
+  border-color:
+    var(--border-medium);
+
+  background:
+    var(--surface-hover);
+}
+
+.input-style:focus {
+  border-color:
+    var(--lilac-400);
+
+  background:
+    var(--surface-hover);
+
+  box-shadow:
+    0 0 0 4px
+    rgb(156 105 226 / 0.17);
+}
+
+.input-style::placeholder {
+  color:
+    var(--text-faint);
+}
+
+textarea.input-style {
+  min-height:
+    7rem;
+}
+
+select.input-style {
+  cursor:
+    pointer;
+}
+
+select.input-style option {
+  color:
+    var(--text-primary);
+
+  background:
+    var(--surface);
+}
+
+input[type="date"].input-style {
+  color-scheme:
+    dark;
+}
+
+/*
+ * =========================================================
+ * ERROR INPUT
+ * =========================================================
+ */
+
+.input-style.input-error {
+  border-color:
+    var(--lilac-300);
+
+  box-shadow:
+    0 0 0 4px
+    rgb(177 138 235 / 0.13);
+}
+
+.input-style.input-error:focus {
+  box-shadow:
+    0 0 0 4px
+    rgb(177 138 235 / 0.22);
+}
+
+/*
+ * =========================================================
+ * PAGE HELPERS
+ * =========================================================
+ */
+
+.db-page {
+  position:
+    relative;
+
+  min-height:
+    100%;
+
+  color:
+    var(--text-primary);
+
+  background:
+    transparent;
+}
+
+.db-surface {
+  background:
+    var(--surface);
+}
+
+.db-surface-soft {
+  background:
+    var(--surface-soft);
+}
+
+.db-surface-raised {
+  background:
+    var(--surface-raised);
+}
+
+.db-surface-blue {
+  background:
+    var(--surface-blue);
+}
+
+.db-surface-purple {
+  background:
+    var(--surface-purple);
+}
+
+.db-border {
+  border:
+    1px solid
+    var(--border-soft);
+}
+
+/*
+ * =========================================================
+ * CSS GRID DECORATION
+ * =========================================================
+ */
+
+.db-grid-panel {
+  position:
+    relative;
+
+  overflow:
+    hidden;
+}
+
+.db-grid-panel::before {
+  position:
+    absolute;
+
+  inset:
+    0;
+
+  pointer-events:
+    none;
+
+  content:
+    "";
+
+  background-image:
+    linear-gradient(
+      rgb(201 224 235 / 0.038)
+        1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      90deg,
+      rgb(201 224 235 / 0.038)
+        1px,
+      transparent 1px
+    );
+
+  background-size:
+    34px 34px;
+
+  mask-image:
+    linear-gradient(
+      135deg,
+      black,
+      transparent 80%
+    );
+}
+
+/*
+ * =========================================================
+ * CSS GLOWS
+ * =========================================================
+ */
+
+.db-glow-purple {
+  position:
+    relative;
+
+  overflow:
+    hidden;
+}
+
+.db-glow-purple::after {
+  position:
+    absolute;
+
+  top:
+    -8rem;
+
+  right:
+    -7rem;
+
+  width:
+    22rem;
+
+  height:
+    22rem;
+
+  border-radius:
+    999px;
+
+  pointer-events:
+    none;
+
+  content:
+    "";
+
+  background:
+    radial-gradient(
+      circle,
+      rgb(156 105 226 / 0.30),
+      transparent 68%
+    );
+}
+
+.db-glow-blue {
+  position:
+    relative;
+
+  overflow:
+    hidden;
+}
+
+.db-glow-blue::after {
+  position:
+    absolute;
+
+  top:
+    -9rem;
+
+  left:
+    30%;
+
+  width:
+    25rem;
+
+  height:
+    25rem;
+
+  border-radius:
+    999px;
+
+  pointer-events:
+    none;
+
+  content:
+    "";
+
+  background:
+    radial-gradient(
+      circle,
+      rgb(115 146 181 / 0.25),
+      transparent 68%
+    );
+}
+
+/*
+ * =========================================================
+ * PRIMARY BUTTON
+ * =========================================================
+ */
+
+.db-button-primary {
+  border:
+    1px solid
+    var(--lilac-400);
+
+  color:
+    var(--sky-50);
+
+  background:
+    linear-gradient(
+      135deg,
+      var(--lilac-400),
+      var(--deep-lilac)
+    );
+
+  box-shadow:
+    0 16px 38px -20px
+    rgb(131 80 196 / 0.72);
+
+  transition:
+    transform 150ms ease,
+    filter 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.db-button-primary:hover {
+  transform:
+    translateY(-1px);
+
+  filter:
+    brightness(1.09);
+
+  box-shadow:
+    0 20px 46px -20px
+    rgb(156 105 226 / 0.66);
+}
+
+/*
+ * =========================================================
+ * SECONDARY BUTTON
+ * =========================================================
+ */
+
+.db-button-secondary {
+  border:
+    1px solid
+    var(--border-medium);
+
+  color:
+    var(--text-primary);
+
+  background:
+    var(--surface-raised);
+
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease;
+}
+
+.db-button-secondary:hover {
+  border-color:
+    var(--border-blue);
+
+  background:
+    var(--surface-hover);
+}
+
+/*
+ * =========================================================
+ * MODALS AND MENUS
+ * =========================================================
+ */
+
+.db-modal {
+  border:
+    1px solid
+    var(--border-medium);
+
+  background:
+    rgb(32 34 48 / 0.96);
+
+  backdrop-filter:
+    blur(20px);
+
+  box-shadow:
+    0 32px 90px -30px
+      rgb(0 0 0 / 0.86),
+    0 12px 44px -28px
+      rgb(131 80 196 / 0.38),
+    inset 0 1px 0
+      rgb(201 224 235 / 0.04);
+}
+
+/*
+ * =========================================================
+ * MODAL SHAKE
+ * =========================================================
+ */
+
+.modal-shake {
+  animation:
+    modal-shake
+    360ms ease;
+}
+
+@keyframes modal-shake {
+  0%,
+  100% {
+    transform:
+      translateX(0);
+  }
+
+  20% {
+    transform:
+      translateX(-8px);
+  }
+
+  40% {
+    transform:
+      translateX(8px);
+  }
+
+  60% {
+    transform:
+      translateX(-5px);
+  }
+
+  80% {
+    transform:
+      translateX(5px);
+  }
+}
+
+/*
+ * =========================================================
+ * REDUCED MOTION
+ * =========================================================
+ */
+
+@media (
+  prefers-reduced-motion:
+    reduce
+) {
   *,
   *::before,
   *::after {
-    scroll-behavior: auto !important;
+    scroll-behavior:
+      auto !important;
+  }
+
+  .modal-shake {
+    animation:
+      none;
   }
 }

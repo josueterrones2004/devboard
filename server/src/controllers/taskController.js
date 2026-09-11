@@ -17,6 +17,7 @@ async function findAccessibleProject(
 
   return Project.findOne({
     _id: projectId,
+
     $or: [
       {
         owner: userId,
@@ -48,6 +49,122 @@ function isProjectMember(
   );
 }
 
+function normalizeLabels(
+  labels,
+) {
+  if (!Array.isArray(labels)) {
+    return [];
+  }
+
+  return labels
+    .map((label) =>
+      String(label).trim(),
+    )
+    .filter(Boolean);
+}
+
+function escapeRegex(value) {
+  return value.replace(
+    /[.*+?^${}()|[\]\\]/g,
+    "\\$&",
+  );
+}
+
+function exactTitleRegex(
+  title,
+) {
+  return new RegExp(
+    `^${escapeRegex(title.trim())}$`,
+    "i",
+  );
+}
+
+function parseDueDate(
+  dueDate,
+) {
+  if (!dueDate) {
+    return null;
+  }
+
+  const parsed =
+    new Date(dueDate);
+
+  if (
+    Number.isNaN(
+      parsed.getTime(),
+    )
+  ) {
+    return null;
+  }
+
+  return parsed;
+}
+
+async function findDuplicateTask({
+  projectId,
+  assignee,
+  title,
+  excludeTaskId = null,
+}) {
+  const query = {
+    project: projectId,
+
+    assignee:
+      assignee || null,
+
+    title:
+      exactTitleRegex(title),
+  };
+
+  if (excludeTaskId) {
+    query._id = {
+      $ne: excludeTaskId,
+    };
+  }
+
+  return Task.findOne(query);
+}
+
+async function syncProjectStatus(
+  project,
+) {
+  const tasks =
+    await Task.find({
+      project: project._id,
+    }).select("status");
+
+  let nextStatus;
+
+  if (tasks.length === 0) {
+    nextStatus =
+      "planning";
+  } else {
+    const allCompleted =
+      tasks.every(
+        (task) =>
+          task.status ===
+          "done",
+      );
+
+    nextStatus =
+      allCompleted
+        ? "completed"
+        : "active";
+  }
+
+  if (
+    project.status !==
+    nextStatus
+  ) {
+    project.status =
+      nextStatus;
+
+    await project.save();
+  }
+
+  return nextStatus;
+}
+
 async function getProjectTasks(
   req,
   res,
@@ -71,7 +188,8 @@ async function getProjectTasks(
 
     const tasks =
       await Task.find({
-        project: project._id,
+        project:
+          project._id,
       })
         .populate(
           "assignee",
@@ -84,7 +202,9 @@ async function getProjectTasks(
         });
 
     return res.status(200).json({
-      count: tasks.length,
+      count:
+        tasks.length,
+
       tasks,
     });
   } catch (error) {
@@ -107,7 +227,8 @@ async function getMyTasks(
   try {
     const tasks =
       await Task.find({
-        assignee: req.user._id,
+        assignee:
+          req.user._id,
       })
         .populate(
           "assignee",
@@ -123,7 +244,9 @@ async function getMyTasks(
         });
 
     return res.status(200).json({
-      count: tasks.length,
+      count:
+        tasks.length,
+
       tasks,
     });
   } catch (error) {
@@ -174,6 +297,43 @@ async function createTask(
       return res.status(400).json({
         message:
           "Task title is required",
+
+        field:
+          "title",
+
+        code:
+          "TASK_TITLE_REQUIRED",
+      });
+    }
+
+    if (!dueDate) {
+      return res.status(400).json({
+        message:
+          "Due date is required",
+
+        field:
+          "dueDate",
+
+        code:
+          "DUE_DATE_REQUIRED",
+      });
+    }
+
+    const normalizedDueDate =
+      parseDueDate(
+        dueDate,
+      );
+
+    if (!normalizedDueDate) {
+      return res.status(400).json({
+        message:
+          "Enter a valid due date",
+
+        field:
+          "dueDate",
+
+        code:
+          "INVALID_DUE_DATE",
       });
     }
 
@@ -186,6 +346,9 @@ async function createTask(
         return res.status(400).json({
           message:
             "Invalid assignee ID",
+
+          field:
+            "assignee",
         });
       }
 
@@ -198,8 +361,42 @@ async function createTask(
         return res.status(400).json({
           message:
             "Assignee must be a project member",
+
+          field:
+            "assignee",
         });
       }
+    }
+
+    const normalizedTitle =
+      title.trim();
+
+    const normalizedAssignee =
+      assignee || null;
+
+    const duplicate =
+      await findDuplicateTask({
+        projectId:
+          project._id,
+
+        assignee:
+          normalizedAssignee,
+
+        title:
+          normalizedTitle,
+      });
+
+    if (duplicate) {
+      return res.status(409).json({
+        message:
+          `A task named "${normalizedTitle}" is already assigned to this user in this project`,
+
+        field:
+          "title",
+
+        code:
+          "DUPLICATE_TASK_TITLE",
+      });
     }
 
     const taskStatus =
@@ -207,42 +404,52 @@ async function createTask(
 
     const lastTask =
       await Task.findOne({
-        project: project._id,
-        status: taskStatus,
+        project:
+          project._id,
+
+        status:
+          taskStatus,
       })
         .sort({
           position: -1,
         })
-        .select("position");
+        .select(
+          "position",
+        );
 
     const task =
       await Task.create({
-        title: title.trim(),
+        title:
+          normalizedTitle,
 
         description:
-          description?.trim() ?? "",
+          description?.trim() ??
+          "",
 
-        status: taskStatus,
+        status:
+          taskStatus,
 
         priority:
           priority ?? "medium",
 
-        project: project._id,
+        project:
+          project._id,
 
         assignee:
-          assignee || null,
+          normalizedAssignee,
 
         labels:
-          Array.isArray(labels)
-            ? labels
-            : [],
+          normalizeLabels(
+            labels,
+          ),
 
         dueDate:
-          dueDate || null,
+          normalizedDueDate,
 
         position:
           lastTask
-            ? lastTask.position + 1
+            ? lastTask.position +
+              1
             : 0,
       });
 
@@ -251,10 +458,18 @@ async function createTask(
       "name email avatar",
     );
 
+    const projectStatus =
+      await syncProjectStatus(
+        project,
+      );
+
     return res.status(201).json({
       message:
         "Task created successfully",
+
       task,
+
+      projectStatus,
     });
   } catch (error) {
     console.error(
@@ -267,7 +482,8 @@ async function createTask(
       "ValidationError"
     ) {
       return res.status(400).json({
-        message: error.message,
+        message:
+          error.message,
       });
     }
 
@@ -283,10 +499,13 @@ async function updateTask(
   res,
 ) {
   try {
-    const { id } = req.params;
+    const { id } =
+      req.params;
 
     if (
-      !mongoose.isValidObjectId(id)
+      !mongoose.isValidObjectId(
+        id,
+      )
     ) {
       return res.status(400).json({
         message:
@@ -328,13 +547,25 @@ async function updateTask(
       position,
     } = req.body;
 
+    const duplicateRelevantChange =
+      typeof title ===
+        "string" ||
+      Object.prototype.hasOwnProperty.call(
+        req.body,
+        "assignee",
+      );
+
     if (
-      typeof title === "string"
+      typeof title ===
+      "string"
     ) {
       if (!title.trim()) {
         return res.status(400).json({
           message:
             "Task title cannot be empty",
+
+          field:
+            "title",
         });
       }
 
@@ -351,23 +582,27 @@ async function updateTask(
     }
 
     if (
-      typeof status === "string"
+      typeof status ===
+      "string"
     ) {
-      task.status = status;
+      task.status =
+        status;
     }
 
     if (
       typeof priority ===
       "string"
     ) {
-      task.priority = priority;
+      task.priority =
+        priority;
     }
 
     if (
       assignee === null ||
       assignee === ""
     ) {
-      task.assignee = null;
+      task.assignee =
+        null;
     } else if (assignee) {
       if (
         !mongoose.isValidObjectId(
@@ -377,6 +612,9 @@ async function updateTask(
         return res.status(400).json({
           message:
             "Invalid assignee ID",
+
+          field:
+            "assignee",
         });
       }
 
@@ -389,23 +627,96 @@ async function updateTask(
         return res.status(400).json({
           message:
             "Assignee must be a project member",
+
+          field:
+            "assignee",
         });
       }
 
-      task.assignee = assignee;
-    }
-
-    if (Array.isArray(labels)) {
-      task.labels = labels;
+      task.assignee =
+        assignee;
     }
 
     if (
-      dueDate === null ||
-      dueDate === ""
+      duplicateRelevantChange
     ) {
-      task.dueDate = null;
-    } else if (dueDate) {
-      task.dueDate = dueDate;
+      const duplicate =
+        await findDuplicateTask({
+          projectId:
+            project._id,
+
+          assignee:
+            task.assignee,
+
+          title:
+            task.title,
+
+          excludeTaskId:
+            task._id,
+        });
+
+      if (duplicate) {
+        return res.status(409).json({
+          message:
+            `A task named "${task.title}" is already assigned to this user in this project`,
+
+          field:
+            "title",
+
+          code:
+            "DUPLICATE_TASK_TITLE",
+        });
+      }
+    }
+
+    if (
+      Array.isArray(labels)
+    ) {
+      task.labels =
+        normalizeLabels(
+          labels,
+        );
+    }
+
+    if (
+      Object.prototype.hasOwnProperty.call(
+        req.body,
+        "dueDate",
+      )
+    ) {
+      if (!dueDate) {
+        return res.status(400).json({
+          message:
+            "Due date is required",
+
+          field:
+            "dueDate",
+
+          code:
+            "DUE_DATE_REQUIRED",
+        });
+      }
+
+      const normalizedDueDate =
+        parseDueDate(
+          dueDate,
+        );
+
+      if (!normalizedDueDate) {
+        return res.status(400).json({
+          message:
+            "Enter a valid due date",
+
+          field:
+            "dueDate",
+
+          code:
+            "INVALID_DUE_DATE",
+        });
+      }
+
+      task.dueDate =
+        normalizedDueDate;
     }
 
     if (
@@ -413,7 +724,8 @@ async function updateTask(
         "number" &&
       position >= 0
     ) {
-      task.position = position;
+      task.position =
+        position;
     }
 
     await task.save();
@@ -423,10 +735,18 @@ async function updateTask(
       "name email avatar",
     );
 
+    const projectStatus =
+      await syncProjectStatus(
+        project,
+      );
+
     return res.status(200).json({
       message:
         "Task updated successfully",
+
       task,
+
+      projectStatus,
     });
   } catch (error) {
     console.error(
@@ -439,7 +759,8 @@ async function updateTask(
       "ValidationError"
     ) {
       return res.status(400).json({
-        message: error.message,
+        message:
+          error.message,
       });
     }
 
@@ -455,10 +776,13 @@ async function deleteTask(
   res,
 ) {
   try {
-    const { id } = req.params;
+    const { id } =
+      req.params;
 
     if (
-      !mongoose.isValidObjectId(id)
+      !mongoose.isValidObjectId(
+        id,
+      )
     ) {
       return res.status(400).json({
         message:
@@ -491,9 +815,16 @@ async function deleteTask(
 
     await task.deleteOne();
 
+    const projectStatus =
+      await syncProjectStatus(
+        project,
+      );
+
     return res.status(200).json({
       message:
         "Task deleted successfully",
+
+      projectStatus,
     });
   } catch (error) {
     console.error(
